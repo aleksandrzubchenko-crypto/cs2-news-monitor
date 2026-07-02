@@ -47,7 +47,7 @@ UA = "Mozilla/5.0 (CS2NewsMonitor/1.0)"
 SITE_URL = os.getenv("SITE_URL", "").strip()
 BRAND_NAME = os.getenv("BRAND_NAME", "").strip()
 SEEN_FILE = os.getenv("SEEN_FILE", "seen.json")
-MAX_POSTS_PER_RUN = int(os.getenv("MAX_POSTS_PER_RUN", "2"))
+MAX_POSTS_PER_RUN = int(os.getenv("MAX_POSTS_PER_RUN", "4"))
 
 # Primary-source X ingestion via a POOL of Nitter instances (free, best-effort).
 # Instances die often — keep this list fresh via the NITTER_INSTANCES env var.
@@ -322,6 +322,13 @@ def draft_llm(it):
             "- Treat leaks/rumors as unconfirmed, not established fact.\n"
             + cta +
             "Provoke debate about the game/scene, never harass or defame real people; punch up, not down. "
+            "STRICTLY never mention or reference politics, war, or the social/economic situation in any "
+            "country — completely off-limits, in any form. "
+            "(Covering players, teams and transfers from ANY country — incl. Ukraine, Russia, etc. — is welcome; "
+            "nationality/flag as a neutral fact is fine. Just never add any political, war, or country-situation "
+            "commentary or framing.) "
+            "Style: do NOT write whole sentences in ALL CAPS (a word or two max, rarely); avoid clichéd tics like "
+            "'someone pinch me', 'hold me', 'let that sit' — vary your openers and phrasing every single time. "
             "Do NOT invent facts, numbers, or quotes — react only to what is given. "
             "Do NOT name competing skin/case/gambling brands.\n\n"
             "News: \"" + it["title"] + "\".")
@@ -432,30 +439,35 @@ def run_once():
 
     topics = load_topics()
     posted = 0
+    handled = set()          # ids we're done with (posted / dup) → mark seen
     for it in picks:
         if posted >= MAX_POSTS_PER_RUN:
-            break
+            break            # remaining newsworthy picks stay eligible next run
         sig = topic_sig(it["title"])
         if is_dup_topic(sig, topics):        # same story already covered → skip
             log(f"skip dup [{category(it)}] {it['title'][:70]}")
-            seen.add(it["id"])
+            handled.add(it["id"])
             continue
         text = make_post(it)
         try:
             post_to_telegram(text)
             posted += 1
             topics.append(sig)
+            handled.add(it["id"])
             log(f"POSTED [{category(it)}] {it['title'][:80]}")
         except Exception as e:
-            log(f"telegram error: {e}")
-        seen.add(it["id"])
+            log(f"telegram error: {e}")   # keep eligible on send failure
 
-    # mark everything we saw this cycle as seen (so non-picks don't resurface)
+    # Mark seen: everything fresh EXCEPT newsworthy picks we didn't reach this run
+    # (so overflow news isn't silently lost — it resurfaces next run).
+    pick_ids = {it["id"] for it in picks}
     for it in fresh:
+        if it["id"] in pick_ids and it["id"] not in handled:
+            continue
         seen.add(it["id"])
     save_seen(seen)
     save_topics(topics)
-    log(f"cycle done: {posted} posted, {len(fresh)} new seen")
+    log(f"cycle done: {posted} posted, {len(fresh)} fresh")
 
 
 def main():
