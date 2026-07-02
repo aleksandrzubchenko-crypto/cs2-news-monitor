@@ -1,28 +1,68 @@
 # Primary-source X/Twitter accounts to monitor (provider-agnostic config).
 # One handle per line (without @). Lines starting with # are comments.
-# RULE: only add a handle here AFTER verifying it on Liquipedia / the official site.
-#       Wrong handles = wrong/None data. Names without a verified handle go in the
-#       "TO VERIFY & ADD" block below (commented) until confirmed.
+# The monitor reads all non-comment lines (active list).
 #
-# Tiers are informational (via # headers); the monitor reads all non-comment lines.
+# RULE: only ACTIVATE a handle after it's verified to resolve on X/Liquipedia.
+# Wrong handle = wrong/None data.
+# All active handles below verified via Liquipedia Links / official account (2026-07-02).
 
-# ── SIGNAL: insiders / leakers / aggregators (fastest breaking) ──
+# ══ ACTIVE (verified) ══
+# insiders / aggregators
 HLTVorg
 cstransfers
 RLewisReports
 Thorin
 ohnePixel
-
-# ── OFFICIAL (Valve / game) ──
+Sheep_Esports
+# official
 CounterStrike
+# orgs  (NOTE: 4 handles below are the GENERAL-ORG accounts, not CS-specific -- see flag at bottom)
+natusvincere
+TeamVitality
+FaZeClan
+G2esports
+astralisgg
+TeamLiquid
+mousesports
+Team__Spirit
+1mongolz
+TeamFalconsGG
+AuroraCS2_GG
+# tournament orgs
+BLASTPremier
+ESLCS
+IEM
+pglesports
+StarLadder_CS
+# dataminers (LLM marks output as unconfirmed leak)
+ThourCS2
+gabefollower
+# anti-cheat / stats
+AntiCheatPD
+leetify
+# players (stars)
+s1mpleO
+zywoo
+NiKoCS_
+donk1337
+FLCm0NESY
+# prospects
+XKacpersky
 
-# ── TO VERIFY & ADD (do not ingest until confirmed on Liquipedia/official site) ──
-# Insiders/media:   Sheep Esports, Flank Esports, GameDaily, KRL, dexerto CS
-# Orgs (Top):       NAVI, Vitality, FaZe, G2, Team Spirit, MOUZ, The MongolZ,
-#                   Falcons, Astralis, Team Liquid, Aurora
-# Players (stars):  donk, ZywOo, m0NESY, s1mple, NiKo, makazze, Kyousuke
-# Prospects:        xKacpersky, r0se, Dawy, xiELO, Mail09, xelex
-# Tournament orgs:  ESL, IEM, BLAST, PGL, StarLadder, Perfect World, EWC
+# ══ NOT ACTIVATED — needs a decision or could not verify ══
+# csfloatcom     — RESOLVES, but CSFloat is a CS2 skin MARKETPLACE = competitor.
+#                  Conflicts with the bot's own "no competing skin/case brands" guardrail. Your call.
+# pricempire     — could not confirm the exact X handle from search; verify before activating
+# FlankEsports   — ambiguous: @FlankEsports vs @Flank_Esport; could not disambiguate the CS outlet
+# dexerto        — only a general multi-game @Dexerto; no CS-specific handle -> would add noise
+# r0se           — B8 Academy prospect; no X handle found on Liquipedia/HLTV
 #
-# Process: each day pull exact official handles from Liquipedia team/player pages,
-# verify, then move the line up into the active (non-comment) list above.
+# NOTE: "KRL" the insider (Sebastien Perez, @KRL_STREAM) is a verified handle but was NOT in this
+#       candidate list; it is NOT the Brazilian player KRL on /counterstrike/KRL. Add if wanted.
+#
+# FLAG (active handles above): TeamVitality / FaZeClan / astralisgg / TeamLiquid are the
+#   ALL-GAMES org accounts (Valorant/LoL/Fortnite etc.), not CS. Verified CS-specific handles:
+#   @TeamVitalityCS  @FaZeEsports  @AstralisCS  @TeamLiquidCS  -- switch to cut non-CS noise.
+#
+# Process: pull exact official handles from Liquipedia team/player pages, verify they
+#          resolve, then activate (move into the ACTIVE list).
