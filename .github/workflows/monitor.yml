@@ -1,12 +1,14 @@
 name: CS2 news monitor
 on:
   schedule:
-    - cron: "*/15 * * * *"   # every 15 minutes (GitHub schedule is best-effort)
+    - cron: "*/15 * * * *"   # restart trigger; concurrency hands off to the queued run seamlessly
   workflow_dispatch: {}
 
 permissions:
-  contents: write            # to commit seen.json back
+  contents: write            # to commit seen.json / topics.json back
 
+# One long-running job at a time. While it runs, scheduled ticks queue (max one
+# pending); when it hits its timeout the queued run starts immediately -> no gap.
 concurrency:
   group: fs-monitor
   cancel-in-progress: false
@@ -14,23 +16,33 @@ concurrency:
 jobs:
   poll:
     runs-on: ubuntu-latest
+    timeout-minutes: 340       # stay under the 6h hard cap; the queued run takes over
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
-      - name: Run one polling cycle
+      - name: Poll every 15 min for ~5.5h (internal loop beats GitHub cron throttling)
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHANNEL: ${{ secrets.TELEGRAM_CHANNEL }}
           SITE_URL: ${{ secrets.SITE_URL }}
           BRAND_NAME: ${{ secrets.BRAND_NAME }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: python3 monitor.py --once
-      - name: Persist dedupe store
         run: |
           git config user.name "cs2-monitor"
           git config user.email "bot@users.noreply.github.com"
-          git add seen.json topics.json || true
-          git commit -m "update dedupe stores [skip ci]" || echo "nothing to commit"
-          git push || echo "push skipped"
+          # loop for 5h40m (20400s), leaving margin under the job timeout
+          deadline=$((SECONDS + 20400))
+          while [ "$SECONDS" -lt "$deadline" ]; do
+            python3 monitor.py --once || echo "cycle error (continuing)"
+            git add seen.json topics.json || true
+            if ! git diff --cached --quiet; then
+              git commit -m "update dedupe stores [skip ci]" || true
+              git pull --rebase --autostash origin main || true
+              git push || echo "push skipped"
+            fi
+            # stop sleeping if the next 15-min tick would exceed our deadline
+            [ "$((SECONDS + 900))" -ge "$deadline" ] && break
+            sleep 900
+          done
