@@ -14,15 +14,16 @@ RLewisReports
 Thorin
 ohnePixel
 Sheep_Esports
+KRL_STREAM
 # official
 CounterStrike
-# orgs  (NOTE: 4 handles below are the GENERAL-ORG accounts, not CS-specific -- see flag at bottom)
+# orgs  (CS-specific division handles where the org runs multiple games)
 natusvincere
-TeamVitality
-FaZeClan
+TeamVitalityCS
+FaZeEsports
 G2esports
-astralisgg
-TeamLiquid
+AstralisCS
+TeamLiquidCS
 mousesports
 Team__Spirit
 1mongolz
@@ -57,12 +58,9 @@ XKacpersky
 # dexerto        — only a general multi-game @Dexerto; no CS-specific handle -> would add noise
 # r0se           — B8 Academy prospect; no X handle found on Liquipedia/HLTV
 #
-# NOTE: "KRL" the insider (Sebastien Perez, @KRL_STREAM) is a verified handle but was NOT in this
-#       candidate list; it is NOT the Brazilian player KRL on /counterstrike/KRL. Add if wanted.
-#
-# FLAG (active handles above): TeamVitality / FaZeClan / astralisgg / TeamLiquid are the
-#   ALL-GAMES org accounts (Valorant/LoL/Fortnite etc.), not CS. Verified CS-specific handles:
-#   @TeamVitalityCS  @FaZeEsports  @AstralisCS  @TeamLiquidCS  -- switch to cut non-CS noise.
+# NOTE: KRL_STREAM = insider Sebastien Perez (activated above). NOT the Brazilian player KRL
+#       on /counterstrike/KRL -- different account, do not swap.
+#       Vitality/FaZe/Astralis/Liquid switched to CS-specific division handles (2026-07-02).
 #
 # Process: pull exact official handles from Liquipedia team/player pages, verify they
 #          resolve, then activate (move into the ACTIVE list).
