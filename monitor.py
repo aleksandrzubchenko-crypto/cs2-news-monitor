@@ -23,7 +23,7 @@ Config via environment variables (see README.md):
   SEEN_FILE            optional — default seen.json (dedupe store)
   POLL_SECONDS         optional — loop mode interval, default 300 (5 min)
 """
-import os, json, time, html, re, sys
+import os, json, time, html, re, sys, hashlib
 from datetime import datetime, timezone
 import urllib.request, urllib.error, urllib.parse
 
@@ -56,6 +56,7 @@ NITTER_INSTANCES = [x.strip() for x in os.getenv(
 ).split(",") if x.strip()]
 PRIMARY_SOURCES_FILE = os.getenv("PRIMARY_SOURCES_FILE", "primary_sources.txt")
 PRIMARY_MAX_PER_ACCOUNT = int(os.getenv("PRIMARY_MAX_PER_ACCOUNT", "3"))
+TOPICS_FILE = os.getenv("TOPICS_FILE", "topics.json")  # story-level dedupe store
 
 # --- newsworthiness: keyword weights ---------------------------------------
 KEYWORDS = {
@@ -143,8 +144,12 @@ def _parse_rss(xml, source, prefix):
             continue
         title = html.unescape(re.sub("<.*?>", "", t.group(1)).strip())
         link = l.group(1).strip()
-        out.append({"id": prefix + str(abs(hash(link))), "title": title,
-                    "url": link, "source": source, "score_hint": 0})
+        # Stable, cross-process id: built-in hash() is randomized per run (PYTHONHASHSEED),
+        # which broke dedup entirely. Use md5, and strip scheme+host so the same tweet served
+        # by a different Nitter instance (pool rotates) maps to one id.
+        key = re.sub(r"^https?://[^/]+", "", link) or link
+        out.append({"id": prefix + hashlib.md5(key.encode("utf-8")).hexdigest()[:16],
+                    "title": title, "url": link, "source": source, "score_hint": 0})
     return out
 
 
@@ -356,6 +361,44 @@ def post_to_telegram(text):
 
 
 # --- dedupe store ----------------------------------------------------------
+# ── story-level dedupe (same news from many sources = one post) ──────────────
+_STOP = set((
+    "the a an of to in on at for and or with as is are was were be been being "
+    "new news official team clan esports cs2 csgo counter strike major after over "
+    "into out from this that his her their have has had will just now more most "
+    "per reports report says said sign signs signed joins wins update"
+).split())
+
+
+def topic_sig(title):
+    """Salient tokens of a headline (names/orgs), lowercased, stopwords removed."""
+    toks = re.findall(r"[A-Za-z0-9']+", html.unescape(title).lower())
+    return sorted({t for t in toks if len(t) > 3 and t not in _STOP})
+
+
+def load_topics():
+    try:
+        with open(TOPICS_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+
+def save_topics(topics):
+    with open(TOPICS_FILE, "w") as f:
+        json.dump(topics[-120:], f)
+
+
+def is_dup_topic(sig, topics):
+    s = set(sig)
+    if len(s) < 2:
+        return False
+    for past in topics:
+        if len(s & set(past)) >= 2:   # shares 2+ salient tokens → same story
+            return True
+    return False
+
+
 def load_seen():
     try:
         with open(SEEN_FILE) as f:
@@ -387,14 +430,21 @@ def run_once():
     scored = [(score_item(it), it) for it in fresh if not is_blocked(it)]
     picks = [it for s, it in sorted(scored, key=lambda x: -x[0]) if s >= MIN_SCORE]
 
+    topics = load_topics()
     posted = 0
     for it in picks:
         if posted >= MAX_POSTS_PER_RUN:
             break
+        sig = topic_sig(it["title"])
+        if is_dup_topic(sig, topics):        # same story already covered → skip
+            log(f"skip dup [{category(it)}] {it['title'][:70]}")
+            seen.add(it["id"])
+            continue
         text = make_post(it)
         try:
             post_to_telegram(text)
             posted += 1
+            topics.append(sig)
             log(f"POSTED [{category(it)}] {it['title'][:80]}")
         except Exception as e:
             log(f"telegram error: {e}")
@@ -404,6 +454,7 @@ def run_once():
     for it in fresh:
         seen.add(it["id"])
     save_seen(seen)
+    save_topics(topics)
     log(f"cycle done: {posted} posted, {len(fresh)} new seen")
 
 
