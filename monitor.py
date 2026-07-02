@@ -49,6 +49,14 @@ BRAND_NAME = os.getenv("BRAND_NAME", "").strip()
 SEEN_FILE = os.getenv("SEEN_FILE", "seen.json")
 MAX_POSTS_PER_RUN = int(os.getenv("MAX_POSTS_PER_RUN", "2"))
 
+# Primary-source X ingestion via a POOL of Nitter instances (free, best-effort).
+# Instances die often — keep this list fresh via the NITTER_INSTANCES env var.
+NITTER_INSTANCES = [x.strip() for x in os.getenv(
+    "NITTER_INSTANCES", "https://nitter.net,https://xcancel.com,https://nitter.poast.org"
+).split(",") if x.strip()]
+PRIMARY_SOURCES_FILE = os.getenv("PRIMARY_SOURCES_FILE", "primary_sources.txt")
+PRIMARY_MAX_PER_ACCOUNT = int(os.getenv("PRIMARY_MAX_PER_ACCOUNT", "3"))
+
 # --- newsworthiness: keyword weights ---------------------------------------
 KEYWORDS = {
     # roster / transfers
@@ -164,7 +172,49 @@ def src_googlenews():
         return []
 
 
-SOURCES = [src_reddit, src_steam, src_hltv, src_googlenews]
+def load_primary_handles():
+    """Read primary_sources.txt → list of handles (without @), skipping comments."""
+    out = []
+    try:
+        with open(PRIMARY_SOURCES_FILE) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    out.append(line.lstrip("@"))
+    except FileNotFoundError:
+        pass
+    return out
+
+
+def src_primary_x():
+    """Read primary-source accounts via a pool of Nitter instances (free, best-effort).
+    Failover across instances; tags each item with its author for attribution."""
+    out = []
+    handles = load_primary_handles()
+    for h in handles:
+        xml = None
+        for base in NITTER_INSTANCES:
+            try:
+                xml = _get(f"{base.rstrip('/')}/{h}/rss", timeout=12)
+                if xml and "<item>" in xml:
+                    break
+                xml = None
+            except Exception:
+                xml = None
+        if not xml:
+            log(f"primary X: no Nitter instance served @{h}")
+            continue
+        items = _parse_rss(xml, f"X:@{h}", f"x_{h}_")[:PRIMARY_MAX_PER_ACCOUNT]
+        for it in items:
+            it["author"] = h
+            it["primary"] = True
+        out.extend(items)
+    if handles:
+        log(f"primary X: {len(out)} items from {len(handles)} accounts")
+    return out
+
+
+SOURCES = [src_primary_x, src_reddit, src_steam, src_hltv, src_googlenews]
 
 
 # --- filtering -------------------------------------------------------------
@@ -175,6 +225,9 @@ def score_item(it):
     s = sum(w for k, w in KEYWORDS.items() if k in text)
     # a strongly-upvoted reddit post is inherently notable
     if it.get("score_hint", 0) >= 300:
+        s += 2
+    # primary-source posts (straight from the account) are higher-value signal
+    if it.get("primary"):
         s += 2
     return s
 
@@ -232,12 +285,18 @@ def draft_llm(it):
     try:
         cat = category(it)
         persona, style = PERSONAS.get(cat, PERSONAS["news"])
+        author_ctx = ""
+        if it.get("author"):
+            author_ctx = (f"\nThis came DIRECTLY from the X account @{it['author']} (a primary source). "
+                          "If it's their opinion, insider leak, or claim, attribute it to them by name; "
+                          "treat leaks as unconfirmed, not fact.\n")
         cta = (f"If — and only if — it feels natural, you may nudge readers to open cases at {SITE_URL}. "
                if SITE_URL else "No call-to-action and no links. ")
         prompt = (
             "You are one of several authors running a top-tier CS2 news Telegram channel for English-speaking fans. "
-            f"Write ONE Telegram post in the voice of \"{persona}\": {style}.\n\n"
-            "FIRST, read the news and judge its context: How big is it? Is it divisive/debatable, "
+            f"Write ONE Telegram post in the voice of \"{persona}\": {style}.\n"
+            + author_ctx +
+            "\nFIRST, read the news and judge its context: How big is it? Is it divisive/debatable, "
             "emotional/legendary, funny/absurd, or routine/informational? Let that judgment drive the post — "
             "the format must FIT the story, not a template.\n"
             "- Divisive/debatable news → a sharp take or a genuine question can work.\n"
