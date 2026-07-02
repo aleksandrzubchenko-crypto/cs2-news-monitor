@@ -206,6 +206,15 @@ CTA = {
 }
 EMOJI = {"roster": "🔁", "skins": "💎", "update": "🛠️", "results": "🏆", "news": "📰"}
 
+# Editorial voice: 4 author personas mapped by news category (see project voice guide).
+PERSONAS = {
+    "roster":  ("The Insider", "breaking-news insider — confident, a little cryptic, no-spin; treats a transfer as a statement"),
+    "results": ("The Hype Man", "pure adrenaline about the moment — high energy, 'did you SEE that'"),
+    "update":  ("The Shitposter", "self-aware internet humor and light memes about the patch/update"),
+    "skins":   ("The Hype Man", "hype about the drop / skin / market moment"),
+    "news":    ("The Analyst", "sharp hot-take with a debate hook — smart, opinionated, a bit provocative"),
+}
+
 
 def draft_template(it):
     cat = category(it)
@@ -221,15 +230,20 @@ def draft_llm(it):
     if not key:
         return None
     try:
-        brand = BRAND_NAME or "a CS2 case-opening site"
-        base = (
-            f"You are the content manager of {brand}'s Telegram channel (CS2 news). "
-            "Audience: English-speaking CS2 fans. Goal: brand reach + engagement. "
-            "Write ONE short Telegram post (max ~45 words) reacting to this news with a punchy hook. "
-            "Use 1-2 emojis, no hashtags. Do NOT mention or cite the source. ")
-        cta = (f"End with a natural CTA to open cases at {SITE_URL}. " if SITE_URL
-               else "Do NOT add any call-to-action or link — just the news reaction. ")
-        prompt = base + cta + "News: \"" + it["title"] + "\" (source: " + it["source"] + ")."
+        cat = category(it)
+        persona, style = PERSONAS.get(cat, PERSONAS["news"])
+        cta = (f"End with a natural nudge to open cases at {SITE_URL}. " if SITE_URL
+               else "No call-to-action and no links. ")
+        prompt = (
+            "You are one of several authors running a top-tier CS2 news Telegram channel for English-speaking fans. "
+            f"Write ONE Telegram post in the voice of \"{persona}\": {style}. "
+            "Rules: English only; max ~45 words; 1-2 relevant emojis; no hashtags; do NOT mention or cite the source; "
+            "open with a punchy hook and end by inviting a reaction (a take, a 'W or L?', or a question) — but don't force it every time. "
+            + cta +
+            "Provoke debate about the game/scene, never harass or defame real people; punch up, not down. "
+            "Do NOT invent facts, numbers, or quotes — react only to what is given. "
+            "Do NOT name competing skin/case/gambling brands. "
+            "News: \"" + it["title"] + "\".")
         body = json.dumps({
             "model": "claude-sonnet-4-6",
             "max_tokens": 200,
