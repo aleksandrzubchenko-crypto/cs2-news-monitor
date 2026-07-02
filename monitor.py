@@ -63,6 +63,20 @@ KEYWORDS = {
 }
 MIN_SCORE = 3  # threshold to consider "newsworthy"
 
+# Skip items whose title promotes a competing skin/case/gambling brand.
+COMPETITORS = [
+    "skin.club", "skinclub", "hellcase", "key-drop", "keydrop", "csgoroll",
+    "csgo roll", "csgoempire", "csgo empire", "gamdom", "datdrop", "clash.gg",
+    "cases.gg", "rustclash", "bandit.camp", "skinsmonkey", "tradeit",
+    "cs.money", "csmoney", "bloodycase", "daddyskins", "duelbits", "rollbit",
+    "howl.gg", "skinport", "waxpeer", "dmarket", "csgofast", "csgoluck",
+]
+
+
+def is_blocked(it):
+    t = it["title"].lower()
+    return any(c in t for c in COMPETITORS)
+
 
 def _get(url, timeout=15):
     req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "*/*"})
@@ -140,7 +154,11 @@ def src_googlenews():
     try:
         url = ("https://news.google.com/rss/search?q=%22CS2%22+OR+%22Counter-Strike%22"
                "+when:1d&hl=en-US&gl=US&ceid=US:en")
-        return _parse_rss(_get(url), "Google News", "gn_")
+        items = _parse_rss(_get(url), "Google News", "gn_")
+        for it in items:
+            # Google News appends " - Publisher" to titles; strip it (no source in posts)
+            it["title"] = re.sub(r"\s+[-–—]\s+[^-–—]+$", "", it["title"]).strip()
+        return items
     except Exception as e:
         log(f"googlenews error: {e}")
         return []
@@ -276,7 +294,7 @@ def run_once():
 
     # new + newsworthy, best first
     fresh = [it for it in items if it["id"] not in seen]
-    scored = [(score_item(it), it) for it in fresh]
+    scored = [(score_item(it), it) for it in fresh if not is_blocked(it)]
     picks = [it for s, it in sorted(scored, key=lambda x: -x[0]) if s >= MIN_SCORE]
 
     posted = 0
