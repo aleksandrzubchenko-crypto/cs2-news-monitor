@@ -1,4 +1,5 @@
 .env
-seen.json
+# seen.json is intentionally committed: the Actions run persists it back so the
+# dedupe store survives across runs (otherwise every run re-posts the same items).
 __pycache__/
 *.pyc
