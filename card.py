@@ -45,7 +45,7 @@ def _cover(hero_path):
         return None
 
 
-def make_card(headline, out_path, highlight=None, hero=None, seed=0):
+def make_card(headline, out_path, highlight=None, hero=None, seed=0, category=None):
     img = _cover(hero) if hero else None
     if img is None:
         img = _brand_bg(seed)
@@ -78,6 +78,13 @@ def make_card(headline, out_path, highlight=None, hero=None, seed=0):
             break
     f = _burb(size); sp = d.textlength(" ", font=f)
     y = S - 150 - len(lines) * (size + 8)
+    # category chip (angular white banner) above the headline
+    if category:
+        cf = _mont(28); lbl = category.upper(); tw = d.textlength(lbl, font=cf)
+        cx0, cy0 = 60, y - 74
+        d.polygon([(cx0, cy0), (cx0 + tw + 74, cy0), (cx0 + tw + 52, cy0 + 52), (cx0, cy0 + 52)], fill=WHITE)
+        d.rectangle([cx0, cy0 + 52, cx0 + 46, cy0 + 58], fill=YELLOW)
+        d.text((cx0 + 26, cy0 + 12), lbl, font=cf, fill=(24, 26, 34))
     for ln in lines:
         x = 60
         for w, c, ww in ln:
@@ -101,5 +108,6 @@ def make_card(headline, out_path, highlight=None, hero=None, seed=0):
 if __name__ == "__main__":
     import tempfile
     p = os.path.join(tempfile.gettempdir(), "fs_card_test.png")
-    make_card("Team Vitality drop their Major Cologne vlog", p, highlight="Team Vitality")
+    make_card("BetBoom have no plans to buy out fl4mus, contract runs to 2029",
+              p, highlight="BetBoom", category="TRANSFER")
     print("rendered", p)

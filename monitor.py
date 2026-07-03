@@ -73,6 +73,8 @@ KEYWORDS = {
     # game / economy
     "update": 3, "patch": 3, "case": 3, "skin": 3, "operation": 3, "knife": 2,
     "price": 2, "market": 2, "ban": 3, "vac": 3, "cheat": 2, "nerf": 2, "buff": 2,
+    # faceit / platform / workshop
+    "faceit": 3, "map pool": 4, "fpl": 3, "workshop": 3, "collection": 3, "sticker": 2,
 }
 MIN_SCORE = 3  # threshold to consider "newsworthy"
 
@@ -571,9 +573,11 @@ def build_and_post(it, caption):
     if not hl:
         return False
     out = os.path.join(tempfile.gettempdir(), "fs_card.png")
+    label = {"roster": "TRANSFER", "results": "RESULTS", "skins": "SKINS",
+             "update": "UPDATE", "news": "NEWS"}.get(category(it), "NEWS")
     try:
         card.make_card(hl, out, highlight=_highlight(hl), hero=hero,
-                       seed=abs(hash(it["id"])) % 9999)
+                       seed=abs(hash(it["id"])) % 9999, category=label)
         _upload_photo(out, caption)
         return True
     except Exception as e:
