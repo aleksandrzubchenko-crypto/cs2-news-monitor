@@ -572,6 +572,14 @@ def build_and_post(it, caption):
     hero = None
     if it.get("image"):
         hero = _download(it["image"], os.path.join(tempfile.gettempdir(), "fs_hero"))
+    # Already-finished graphic (roster card, busy image)? Post it raw — don't overlay
+    # our headline on faces/text. Our copy stays in the caption.
+    if hero and card.text_zone_busy(hero):
+        try:
+            _upload_photo(hero, caption)
+            return True
+        except Exception as e:
+            log(f"raw hero post error: {e}")
     hl = _headline(it)
     if not hl:
         return False
