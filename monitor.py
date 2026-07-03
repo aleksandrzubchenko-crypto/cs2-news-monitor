@@ -99,8 +99,11 @@ OTHER_GAMES = [
     "dota2", "apex legends", "fortnite", "rainbow six", "ea fc", "fifa",
     "rocket league", "overwatch", "call of duty", "warzone", "marvel rivals",
     "riot games", "pubg", "mobile legends", "honor of kings",
+    # Valorant ecosystem (leagues/circuits often named without the word "valorant")
+    "nacl", "champions tour", "game changers", "vct americas", "vct emea",
+    "vct pacific", "valorant challengers",
 ]
-_OTHER_RX = re.compile(r"\b(lol|r6|cod|tft|hok)\b")
+_OTHER_RX = re.compile(r"\b(lol|r6|cod|tft|hok|vct|vcl)\b")
 
 
 def is_offtopic(it):
@@ -460,7 +463,7 @@ def draft_llm(it):
             "News: \"" + it["title"] + "\".")
         body = json.dumps({
             "model": "claude-sonnet-4-6",
-            "max_tokens": 200,
+            "max_tokens": 320,
             "messages": [{"role": "user", "content": prompt}],
         }).encode()
         req = urllib.request.Request(
