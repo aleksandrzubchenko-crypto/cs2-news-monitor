@@ -87,6 +87,39 @@ def is_blocked(it):
     return any(c in t for c in COMPETITORS)
 
 
+# Drop items about OTHER games / off-topic (primary accounts cross-post a lot).
+OTHER_GAMES = [
+    "valorant", "league of legends", "teamfight tactics", "wild rift", "dota 2",
+    "dota2", "apex legends", "fortnite", "rainbow six", "ea fc", "fifa",
+    "rocket league", "overwatch", "call of duty", "warzone", "marvel rivals",
+    "riot games", "pubg", "mobile legends", "honor of kings",
+]
+_OTHER_RX = re.compile(r"\b(lol|r6|cod|tft|hok)\b")
+
+
+def is_offtopic(it):
+    t = it["title"].lower()
+    return any(g in t for g in OTHER_GAMES) or bool(_OTHER_RX.search(t))
+
+
+# If draft_llm returns one of these (or the SKIP sentinel), do NOT post it.
+_REFUSAL = (
+    "skip", "i can't", "i cannot", "isn't cs2", "not cs2", "wrong game",
+    "outside the scope", "outside our", "please share", "i'll get it done",
+    "nothing to post", "completely outside", "can't repurpose", "can't write",
+    "not our game", "league of legends", "valorant",
+)
+
+
+def is_unusable(text):
+    if not text:
+        return True
+    tl = text.strip().lower()
+    if tl.rstrip(".!").strip() == "skip":
+        return True
+    return any(m in tl for m in _REFUSAL)
+
+
 def _get(url, timeout=15):
     req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "*/*"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -300,6 +333,9 @@ def draft_llm(it):
         prompt = (
             "You are one of several authors running a top-tier CS2 news Telegram channel for English-speaking fans. "
             f"Write ONE Telegram post in the voice of \"{persona}\": {style}.\n"
+            "If this news is NOT about Counter-Strike (CS2/CS:GO) — e.g., another game (Valorant, League, "
+            "Dota), merch, or anything off-topic — reply with exactly one word: SKIP (nothing else). "
+            "Never write an explanation, apology, or 'please share' message.\n"
             + author_ctx +
             "\nFIRST, read the news and judge its context: How big is it? Is it divisive/debatable, "
             "emotional/legendary, funny/absurd, or routine/informational? Let that judgment drive the post — "
@@ -434,7 +470,8 @@ def run_once():
 
     # new + newsworthy, best first
     fresh = [it for it in items if it["id"] not in seen]
-    scored = [(score_item(it), it) for it in fresh if not is_blocked(it)]
+    scored = [(score_item(it), it) for it in fresh
+              if not is_blocked(it) and not is_offtopic(it)]
     picks = [it for s, it in sorted(scored, key=lambda x: -x[0]) if s >= MIN_SCORE]
 
     topics = load_topics()
@@ -449,6 +486,10 @@ def run_once():
             handled.add(it["id"])
             continue
         text = make_post(it)
+        if is_unusable(text):            # non-CS2 / refusal / SKIP → never post
+            log(f"skip non-CS2/unusable [{it['title'][:60]}]")
+            handled.add(it["id"])
+            continue
         try:
             post_to_telegram(text)
             posted += 1
