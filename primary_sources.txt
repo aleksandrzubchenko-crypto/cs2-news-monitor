@@ -29,6 +29,7 @@ Team__Spirit
 1mongolz
 TeamFalconsGG
 AuroraCS2_GG
+BetBoomTeam
 # tournament orgs
 BLASTPremier
 ESLCS
@@ -49,6 +50,12 @@ donk1337
 FLCm0NESY
 # prospects
 XKacpersky
+# casters / interviewers (quotes, stage / post-match takes)
+MosesGG
+HenryGcsgo
+OnFireAnders
+# platform (map pool / seasons / FPL / rankings)
+FACEITcs
 
 # ══ NOT ACTIVATED — needs a decision or could not verify ══
 # csfloatcom     — RESOLVES, but CSFloat is a CS2 skin MARKETPLACE = competitor.
@@ -58,17 +65,10 @@ XKacpersky
 # dexerto        — only a general multi-game @Dexerto; no CS-specific handle -> would add noise
 # r0se           — B8 Academy prospect; no X handle found on Liquipedia/HLTV
 #
-# INTERVIEWS / QUOTES candidates (player quotes, stage/post-match) — verify handles, then activate:
-#   BetBoomTeam        — tournament broadcast + interview clips (verified brand)
-#   OZ_moses           — stage interviewer/analyst (Jason "moses" O'Toole) — verify
-#   HenryG             — caster/interviewer (Henry Greer) — verify
-#   OnFireAnders       — caster/analyst (Anders Blume) — verify
-#   cs2proplayers      — clip aggregator (TikTok/X) — verify
-#   (also: esports.gg, Dexerto CS — quote write-ups; site-level, no clean CS-only X handle)
-#
-# FACEIT candidates (map pool / seasons / FPL / rankings / bans) — verify, then activate:
-#   FACEITcs           — official FACEIT CS2 (news, map pool, seasons) — appears verified
-#   (rankings/leaderboards: faceit.com/cs2/rank + faceittracker.net — site-level, not X)
+# ACTIVATED 2026-07-02 (verified on X/search): BetBoomTeam (org), MosesGG (was OZ_moses),
+#   HenryGcsgo (was HenryG), OnFireAnders, FACEITcs — handles corrected to the ones that resolve.
+#   cs2proplayers — could NOT verify any such account; left out until confirmed.
+#   (esports.gg, Dexerto CS — quote write-ups; site-level, no clean CS-only X handle.)
 #
 # NOTE: KRL_STREAM = insider Sebastien Perez (activated above). NOT the Brazilian player KRL
 #       on /counterstrike/KRL -- different account, do not swap.
