@@ -134,12 +134,23 @@ def src_reddit():
         data = json.loads(_get("https://www.reddit.com/r/GlobalOffensive/new.json?limit=25"))
         for c in data.get("data", {}).get("children", []):
             d = c["data"]
+            img = None
+            u = d.get("url_overridden_by_dest") or d.get("url", "")
+            if re.search(r"\.(jpg|jpeg|png|gif|webp)(\?|$)", u):
+                img = u
+            if not img:
+                try:
+                    img = d["preview"]["images"][0]["source"]["url"].replace("&amp;", "&")
+                except Exception:
+                    th = d.get("thumbnail", "")
+                    img = th if th.startswith("http") else None
             out.append({
                 "id": "reddit_" + d["id"],
                 "title": html.unescape(d.get("title", "")),
                 "url": "https://reddit.com" + d.get("permalink", ""),
                 "source": "Reddit r/GlobalOffensive",
                 "score_hint": d.get("score", 0),
+                "image": img,
             })
     except Exception as e:
         log(f"reddit error: {e}")
@@ -167,6 +178,17 @@ def src_steam():
     return out
 
 
+def _norm_img(url):
+    """Rewrite Nitter proxy media URLs (/pic/…) to direct pbs.twimg.com so
+    Telegram can actually fetch the image server-side."""
+    if not url:
+        return url
+    m = re.search(r"/pic/(?:orig/)?(.+)$", url)
+    if m:
+        return "https://pbs.twimg.com/" + urllib.parse.unquote(m.group(1)).lstrip("/")
+    return url
+
+
 def _parse_rss(xml, source, prefix):
     out = []
     for m in re.finditer(r"<item>(.*?)</item>", xml, re.S):
@@ -181,8 +203,14 @@ def _parse_rss(xml, source, prefix):
         # which broke dedup entirely. Use md5, and strip scheme+host so the same tweet served
         # by a different Nitter instance (pool rotates) maps to one id.
         key = re.sub(r"^https?://[^/]+", "", link) or link
+        hb = html.unescape(block)   # media/img in <description> is often HTML-escaped
+        mm = (re.search(r'<media:content[^>]+url="([^"]+)"', hb)
+              or re.search(r'<enclosure[^>]+url="([^"]+)"', hb)
+              or re.search(r'<img[^>]+src="([^"]+)"', hb))
+        img = _norm_img(mm.group(1)) if mm else None
         out.append({"id": prefix + hashlib.md5(key.encode("utf-8")).hexdigest()[:16],
-                    "title": title, "url": link, "source": source, "score_hint": 0})
+                    "title": title, "url": link, "source": source,
+                    "score_hint": 0, "image": img})
     return out
 
 
@@ -347,7 +375,12 @@ def draft_llm(it):
             "Do NOT reflexively end with 'Drop your take' / 'W or L?' / a question — MOST posts should just land "
             "with personality and stop. Use an engagement prompt only when the topic genuinely earns it, and vary it. "
             "Vary your structure, length, and opening so no two posts feel alike. Match the energy to the news.\n\n"
-            "Hard rules: English only; ~15-45 words; 1-2 relevant emojis; no hashtags.\n"
+            "Hard rules: English only; ~15-45 words; no hashtags.\n"
+            "FORMAT (match a top CS2 news channel's style): open with ONE category/tone emoji; put a "
+            "country-flag emoji right before each player/team name to mark nationality (neutral fact ONLY — "
+            "never political); <b>bold</b> the key names, orgs and the core fact; keep it tight and punchy; "
+            "for multi-item content (roster/tier lists) use short lines each starting with '•'. "
+            "Use Telegram HTML (<b>…</b>) and real line breaks — no markdown.\n"
             "Sourcing:\n"
             "- Do NOT credit the outlet/site that merely republished the news (no 'via <site>').\n"
             "- BUT if the content is a specific person's OPINION, INSIDER LEAK, RUMOR or CLAIM, you MUST "
@@ -391,9 +424,24 @@ def make_post(it):
 
 
 # --- telegram --------------------------------------------------------------
-def post_to_telegram(text):
+def post_to_telegram(text, image=None):
     token = os.environ["TELEGRAM_BOT_TOKEN"]
     chat = os.environ["TELEGRAM_CHANNEL"]
+    # With an image: send as a photo + caption. If Telegram can't fetch/accept the
+    # image URL, fall back to a plain text post (image is a bonus, never a blocker).
+    if image:
+        body = urllib.parse.urlencode({
+            "chat_id": chat, "photo": image, "caption": text, "parse_mode": "HTML",
+        }).encode()
+        try:
+            req = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendPhoto", data=body)
+            with urllib.request.urlopen(req, timeout=25) as r:
+                resp = json.loads(r.read())
+            if resp.get("ok"):
+                return resp
+            log(f"sendPhoto rejected ({resp.get('description')}); text fallback")
+        except Exception as e:
+            log(f"sendPhoto error ({e}); text fallback")
     body = urllib.parse.urlencode({
         "chat_id": chat, "text": text, "parse_mode": "HTML",
         "disable_web_page_preview": "false",
@@ -491,11 +539,11 @@ def run_once():
             handled.add(it["id"])
             continue
         try:
-            post_to_telegram(text)
+            post_to_telegram(text, it.get("image"))
             posted += 1
             topics.append(sig)
             handled.add(it["id"])
-            log(f"POSTED [{category(it)}] {it['title'][:80]}")
+            log(f"POSTED [{category(it)}]{' 🖼' if it.get('image') else ''} {it['title'][:76]}")
         except Exception as e:
             log(f"telegram error: {e}")   # keep eligible on send failure
 
