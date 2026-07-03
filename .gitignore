@@ -3,3 +3,5 @@
 # dedupe store survives across runs (otherwise every run re-posts the same items).
 __pycache__/
 *.pyc
+# card renderer test output (runtime uses the temp dir, not the repo)
+/card_test.png

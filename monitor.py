@@ -23,9 +23,13 @@ Config via environment variables (see README.md):
   SEEN_FILE            optional — default seen.json (dedupe store)
   POLL_SECONDS         optional — loop mode interval, default 300 (5 min)
 """
-import os, json, time, html, re, sys, hashlib
+import os, json, time, html, re, sys, hashlib, tempfile
 from datetime import datetime, timezone
 import urllib.request, urllib.error, urllib.parse
+try:
+    import card                     # Pillow-based branded card renderer
+except Exception:
+    card = None
 
 def _load_dotenv(path=".env"):
     """Minimal .env loader (no external deps). Existing env vars win."""
@@ -120,6 +124,48 @@ def is_unusable(text):
     return any(m in tl for m in _REFUSAL)
 
 
+# Org video/vlog/BTS content → include a link so fans can actually watch it
+# (exception to the general "no links" rule).
+_VIDEO_KW = ("vlog", "behind the scenes", "behind-the-scenes", "documentary",
+             "docuseries", "mini-movie", "mini movie", "episode", "the film",
+             "our movie", "watch the", "new video", "short film")
+
+
+def is_org_video(it):
+    t = it["title"].lower()
+    return bool(it.get("primary")) and any(k in t for k in _VIDEO_KW)
+
+
+def _resolve(u, timeout=10):
+    """Follow redirects (e.g. t.co) to the final destination URL."""
+    try:
+        req = urllib.request.Request(u, headers={"User-Agent": UA}, method="HEAD")
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return r.geturl()
+    except Exception:
+        try:
+            with urllib.request.urlopen(
+                    urllib.request.Request(u, headers={"User-Agent": UA}), timeout=timeout) as r:
+                return r.geturl()
+        except Exception:
+            return None
+
+
+def video_link(it):
+    """The REAL video destination (YouTube etc.) from the item's outbound links —
+    never the source tweet. Resolves t.co shortlinks. None if not verifiable."""
+    links = it.get("links", [])
+    for u in links:                                  # direct video link
+        if re.search(r"(youtube\.com/watch|youtu\.be/|youtube\.com/shorts|twitch\.tv/videos)", u):
+            return u
+    for u in links:                                  # shortlink → resolve → check
+        if re.search(r"(t\.co/|bit\.ly/|trib\.al/)", u):
+            r = _resolve(u)
+            if r and re.search(r"(youtube\.com|youtu\.be|twitch\.tv)", r):
+                return r
+    return None
+
+
 def _get(url, timeout=15):
     req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "*/*"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -208,9 +254,16 @@ def _parse_rss(xml, source, prefix):
               or re.search(r'<enclosure[^>]+url="([^"]+)"', hb)
               or re.search(r'<img[^>]+src="([^"]+)"', hb))
         img = _norm_img(mm.group(1)) if mm else None
+        # outbound links in the post body (for org-video → real vlog URL)
+        ext = []
+        for u in re.findall(r'href="(https?://[^"]+)"', hb) + re.findall(r'https?://[^\s<>"]+', hb):
+            if re.search(r'(nitter|twitter\.com|x\.com|/pic/|pbs\.twimg|t\.me/|/status/)', u):
+                continue
+            if u not in ext:
+                ext.append(u)
         out.append({"id": prefix + hashlib.md5(key.encode("utf-8")).hexdigest()[:16],
                     "title": title, "url": link, "source": source,
-                    "score_hint": 0, "image": img})
+                    "score_hint": 0, "image": img, "links": ext[:6]})
     return out
 
 
@@ -389,6 +442,8 @@ def draft_llm(it):
             "- If it's clearly a rumor/leak but no person is named in what you're given, frame it as an unconfirmed "
             "leak — do NOT invent a source name.\n"
             "- Treat leaks/rumors as unconfirmed, not established fact.\n"
+            "- If it's an org's own video/vlog/behind-the-scenes, present it as worth a watch; a real link "
+            "to the video is appended automatically below — do NOT write your own link or say 'link in bio'.\n"
             + cta +
             "Provoke debate about the game/scene, never harass or defame real people; punch up, not down. "
             "STRICTLY never mention or reference politics, war, or the social/economic situation in any "
@@ -449,6 +504,81 @@ def post_to_telegram(text, image=None):
     req = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendMessage", data=body)
     with urllib.request.urlopen(req, timeout=20) as r:
         return json.loads(r.read())
+
+
+def _upload_photo(path, caption):
+    """sendPhoto with a LOCAL file (multipart) + caption."""
+    import uuid
+    token = os.environ["TELEGRAM_BOT_TOKEN"]; chat = os.environ["TELEGRAM_CHANNEL"]
+    B = ("----fs" + uuid.uuid4().hex).encode()
+    with open(path, "rb") as fh:
+        photo = fh.read()
+    body = b""
+    for k, v in [("chat_id", chat), ("caption", caption[:1024]), ("parse_mode", "HTML")]:
+        body += b"--" + B + b'\r\nContent-Disposition: form-data; name="' + k.encode() + b'"\r\n\r\n' + v.encode() + b"\r\n"
+    body += (b"--" + B + b'\r\nContent-Disposition: form-data; name="photo"; filename="card.png"\r\n'
+             b"Content-Type: image/png\r\n\r\n" + photo + b"\r\n--" + B + b"--\r\n")
+    req = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendPhoto", data=body,
+                                 headers={"Content-Type": "multipart/form-data; boundary=" + B.decode()})
+    with urllib.request.urlopen(req, timeout=40) as r:
+        return json.loads(r.read())
+
+
+def _download(url, path):
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": UA})
+        with urllib.request.urlopen(req, timeout=20) as r, open(path, "wb") as f:
+            f.write(r.read())
+        return path
+    except Exception as e:
+        log(f"hero download failed: {e}")
+        return None
+
+
+# Names to accent (yellow) on the card headline
+_HL_NAMES = ["natus vincere", "team vitality", "vitality", "team liquid", "the mongolz",
+             "mongolz", "team spirit", "spirit", "faze", "g2", "mouz", "falcons", "aurora",
+             "astralis", "navi", "donk", "zywoo", "m0nesy", "s1mple", "niko", "makazze",
+             "broky", "karrigan", "cache", "vitality"]
+
+
+def _headline(it):
+    t = re.sub(r"https?://\S+", "", it["title"])
+    t = re.sub(r"<[^>]+>", "", t)
+    t = re.sub(r"[^0-9A-Za-z\s'\-:&.]", " ", t)      # drop emoji/odd punctuation
+    t = re.sub(r"\s+", " ", t).strip()
+    return " ".join(t.split()[:14])
+
+
+def _highlight(headline):
+    h = headline.lower()
+    best = None
+    for n in _HL_NAMES:
+        if n in h and (best is None or len(n) > len(best)):
+            best = n
+    return best
+
+
+def build_and_post(it, caption):
+    """Render a branded card for the item and post it as a photo. False → caller
+    falls back to a plain text/photo-URL post."""
+    if card is None:
+        return False
+    hero = None
+    if it.get("image"):
+        hero = _download(it["image"], os.path.join(tempfile.gettempdir(), "fs_hero"))
+    hl = _headline(it)
+    if not hl:
+        return False
+    out = os.path.join(tempfile.gettempdir(), "fs_card.png")
+    try:
+        card.make_card(hl, out, highlight=_highlight(hl), hero=hero,
+                       seed=abs(hash(it["id"])) % 9999)
+        _upload_photo(out, caption)
+        return True
+    except Exception as e:
+        log(f"card build/post error: {e}")
+        return False
 
 
 # --- dedupe store ----------------------------------------------------------
@@ -538,12 +668,20 @@ def run_once():
             log(f"skip non-CS2/unusable [{it['title'][:60]}]")
             handled.add(it["id"])
             continue
+        if is_org_video(it):             # vlog/video → need the REAL video link, else skip
+            vl = video_link(it)
+            if not vl:
+                log(f"skip org-video w/o verifiable link [{it['title'][:50]}]")
+                handled.add(it["id"])
+                continue
+            text = text.rstrip() + f"\n\n▶️ {vl}"
         try:
-            post_to_telegram(text, it.get("image"))
+            if not build_and_post(it, text):          # branded card → photo
+                post_to_telegram(text, it.get("image"))  # fallback: text / photo-URL
             posted += 1
             topics.append(sig)
             handled.add(it["id"])
-            log(f"POSTED [{category(it)}]{' 🖼' if it.get('image') else ''} {it['title'][:76]}")
+            log(f"POSTED [{category(it)}] {it['title'][:76]}")
         except Exception as e:
             log(f"telegram error: {e}")   # keep eligible on send failure
 
