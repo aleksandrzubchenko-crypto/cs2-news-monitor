@@ -1,0 +1,43 @@
+{
+  "canvas": [
+    1920,
+    1080
+  ],
+  "photo_bbox": [
+    0,
+    0,
+    1920,
+    1080
+  ],
+  "photo_slots": [
+    [
+      0,
+      0,
+      1920,
+      1080
+    ]
+  ],
+  "texts": [
+    {
+      "name": "THE ERA OF FEMALE HEROINES: WHERE IS SONY HEADING ",
+      "bbox": [
+        507,
+        78,
+        1412,
+        124
+      ],
+      "font_px": 61,
+      "nlines": 1,
+      "color": [
+        255,
+        255,
+        255
+      ],
+      "align": "center",
+      "sample": "THE ERA OF FEMALE HEROINES: WHERE IS SONY HEADING"
+    }
+  ],
+  "team_logo_slot": null,
+  "slug": "shablon_oblozhki",
+  "source_psd": "Шаблон Обложки.psd"
+}

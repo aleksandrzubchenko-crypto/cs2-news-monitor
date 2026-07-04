@@ -113,21 +113,26 @@ def _render_text_zone(base, zone, spec):
         oy += lh
 
 
-def render(slug, out_path, hero=None, lines=None, team_logo=None, bg=(12, 16, 30)):
+def render(slug, out_path, hero=None, heroes=None, lines=None, team_logo=None, bg=(12, 16, 30)):
     d = os.path.join(TPL_ROOT, slug)
     frame = Image.open(os.path.join(d, "frame.png")).convert("RGBA")
     zones = json.load(open(os.path.join(d, "zones.json"), encoding="utf-8"))
     W, H = zones["canvas"]
 
     canvas = Image.new("RGBA", (W, H), bg + (255,))
-    # hero в зону фото
-    if hero:
-        x1, y1, x2, y2 = zones["photo_bbox"]
+    # heroes → фото-слоты (слева-направо). Один hero заполняет все слоты (или единственный).
+    slots = zones.get("photo_slots") or [zones["photo_bbox"]]
+    imgs = list(heroes) if heroes else ([hero] if hero else [])
+    for i, slot in enumerate(slots):
+        src = imgs[i] if i < len(imgs) else (imgs[-1] if imgs else None)
+        if not src:
+            continue
+        x1, y1, x2, y2 = slot
         try:
-            canvas.alpha_composite(_cover(hero, x2 - x1, y2 - y1), (x1, y1))
+            canvas.alpha_composite(_cover(src, x2 - x1, y2 - y1), (x1, y1))
         except Exception:
             pass
-    # пиксель-перфект рамка PSD поверх hero
+    # пиксель-перфект рамка PSD поверх фото
     canvas.alpha_composite(frame, (0, 0))
     # лого команды в слот
     if team_logo and zones.get("team_logo_slot"):

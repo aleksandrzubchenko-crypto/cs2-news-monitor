@@ -40,6 +40,13 @@ BUILDERS = {
     "update": lambda f: [
         {"text": f.get("headline", ""), "highlight": f.get("highlight", "")},
     ],
+    # VS / матч-результат: 2 фото-слота (команды), зоны [заголовок VS, счёт, саб]
+    "photo2": lambda f: [
+        {"text": f.get("headline") or f"{f.get('team1','')} VS {f.get('team2','')}".strip(),
+         "highlight": f.get("highlight", "VS")},
+        {"text": f.get("score", "")},
+        {"text": f.get("sub", "")},
+    ],
 }
 
 # тип карточки (из LLM/категории) → слаг шаблона
@@ -48,6 +55,7 @@ TYPE_SLUG = {
     "quote": "quote", "interview": "quote",
     "reddit": "seredina", "news": "seredina", "transfer": "seredina", "results": "seredina",
     "update": "update", "patch": "update", "workshop": "update", "skins": "update",
+    "vs": "photo2", "match": "photo2",   # требует 2 hero — включим в ENABLED после 2-hero-врезки
 }
 
 # нужен ли шаблону фото-hero (все текущие — да; на будущее для без-фото форматов)

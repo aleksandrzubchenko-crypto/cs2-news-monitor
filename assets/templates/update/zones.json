@@ -9,6 +9,14 @@
     932,
     966
   ],
+  "photo_slots": [
+    [
+      147,
+      181,
+      932,
+      966
+    ]
+  ],
   "texts": [
     {
       "name": "New dust 2 update",
@@ -40,8 +48,8 @@
       "nlines": 1,
       "color": [
         255,
-        196,
-        0
+        255,
+        255
       ],
       "align": "center",
       "sample": "Apex on the news about adding cache"

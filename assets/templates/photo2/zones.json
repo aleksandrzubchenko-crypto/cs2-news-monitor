@@ -1,0 +1,90 @@
+{
+  "canvas": [
+    1080,
+    1080
+  ],
+  "photo_bbox": [
+    0,
+    267,
+    538,
+    879
+  ],
+  "photo_slots": [
+    [
+      0,
+      267,
+      538,
+      879
+    ],
+    [
+      536,
+      266,
+      1080,
+      878
+    ]
+  ],
+  "texts": [
+    {
+      "name": "G2 VS Spirit",
+      "bbox": [
+        291,
+        77,
+        799,
+        140
+      ],
+      "font_px": 91,
+      "nlines": 1,
+      "color": [
+        32,
+        34,
+        43
+      ],
+      "align": "center",
+      "sample": "G2 VS Spirit"
+    },
+    {
+      "name": "4:13",
+      "bbox": [
+        452,
+        179,
+        656,
+        254
+      ],
+      "font_px": 110,
+      "nlines": 1,
+      "color": [
+        255,
+        204,
+        0
+      ],
+      "align": "center",
+      "sample": "4:13"
+    },
+    {
+      "name": "Results of all team meetings",
+      "bbox": [
+        375,
+        937,
+        699,
+        952
+      ],
+      "font_px": 22,
+      "nlines": 1,
+      "color": [
+        255,
+        204,
+        0
+      ],
+      "align": "center",
+      "sample": "Results of all team meetings"
+    }
+  ],
+  "team_logo_slot": [
+    174,
+    897,
+    301,
+    1044
+  ],
+  "slug": "photo2",
+  "source_psd": "2 фото.psd"
+}
