@@ -585,7 +585,7 @@ _LIQ_PAGE = {
     "furia": "FURIA", "heroic": "Heroic", "ence": "ENCE", "cloud9": "Cloud9", "c9": "Cloud9",
     "big": "BIG", "fnatic": "Fnatic", "virtus.pro": "Virtus.pro", "vp": "Virtus.pro",
     "gamerlegion": "GamerLegion", "eternal fire": "Eternal_Fire", "3dmax": "3DMAX",
-    "tyloo": "TYLOO", "complexity": "Complexity", "pain": "paiN_Gaming", "9z": "9z",
+    "tyloo": "TYLOO", "complexity": "Complexity", "pain": "paiN_Gaming", "9z": "9z_Team",
     "monte": "Monte", "nip": "Ninjas_in_Pyjamas", "ninjas in pyjamas": "Ninjas_in_Pyjamas",
     "imperial": "Imperial", "saw": "SAW", "lynn vision": "Lynn_Vision", "wildcard": "Wildcard",
     "m80": "M80", "nrg": "NRG", "passion ua": "Passion_UA", "b8": "B8",
@@ -593,6 +593,29 @@ _LIQ_PAGE = {
     "ropz": "Ropz", "sh1ro": "Sh1ro", "hobbit": "HObbit", "twistzz": "Twistzz",
     "electronic": "Electronic", "b1t": "B1t", "jl": "JL", "magixx": "Magixx",
     "frozen": "Frozen", "xantares": "XANTARES", "brollan": "Brollan", "w0nderful": "W0nderful",
+    # ── extended orgs (verify + prune on host; wrong title = safe no-op) ──
+    "mibr": "MIBR", "og": "OG", "betboom": "BetBoom_Team", "apeks": "Apeks",
+    "metizport": "Metizport", "sangal": "Sangal_Esports", "fluxo": "Fluxo",
+    "red canids": "RED_Canids", "legacy": "Legacy", "nemiga": "Nemiga_Gaming",
+    "amkal": "AMKAL_ESPORTS", "rare atom": "Rare_Atom", "atox": "ATOX",
+    "the huns": "The_Huns_Esports", "chinggis warriors": "Chinggis_Warriors",
+    "zero tenacity": "Zero_Tenacity", "ecstatic": "ECSTATIC", "sinners": "SINNERS_Esports",
+    "permitta": "Permitta_Esports", "endpoint": "Endpoint",
+    "9 pandas": "9Pandas", "nine pandas": "9Pandas", "gaimin gladiators": "Gaimin_Gladiators",
+    "koi": "KOI", "rebels": "Rebels_Gaming", "sampi": "Sampi", "flyquest": "FlyQuest",
+    "wings up": "Wings_Up_Gaming", "betera": "Betera_Esports",
+    # ── extended players / prospects ──
+    "ax1le": "Ax1Le", "interz": "Interz", "chopper": "Chopper", "sdy": "Sdy",
+    "degster": "Degster", "senzu": "Senzu", "torzsi": "Torzsi", "spinx": "Spinx",
+    "flamez": "FlameZ", "mezii": "Mezii", "apex": "ApEX", "magisk": "Magisk",
+    "device": "Device", "stavn": "Stavn", "jabbi": "Jabbi", "staehr": "Staehr",
+    "hooxi": "HooXi", "snappi": "Snappi", "hunter": "HuNter-", "malbsmd": "MalbsMd",
+    "rain": "Rain", "jimpphat": "Jimpphat", "mzinho": "Mzinho", "kyxsan": "Kyxsan",
+    "nertz": "Nertz", "jcobbb": "Jcobbb", "fame": "Fame", "techno4k": "Techno4K",
+    "910": "910", "kyousuke": "Kyousuke", "tn1r": "TN1R",
+    "perfecto": "Perfecto", "jame": "Jame", "n0rb3r7": "N0rb3r7", "fl1t": "Fl1t",
+    "biguzera": "Biguzera", "saffee": "Saffee", "yekindar": "YEKINDAR", "bymas": "Bymas",
+    "woxic": "Woxic", "xertion": "XertioN", "maj3r": "MAJ3R", "wicadia": "Wicadia",
 }
 _LIQ_UA = "FarmskinsCS2NewsBot/1.0 (Telegram news cards; +https://t.me/farmskins)"
 _liq_cache = {}
