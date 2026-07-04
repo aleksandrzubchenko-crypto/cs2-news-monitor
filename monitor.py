@@ -569,6 +569,60 @@ def _highlight(headline):
     return best
 
 
+# Detected name (lowercase) → Liquipedia CS page title, for pulling a real
+# portrait/logo when the news item ships no image of its own.
+_LIQ_PAGE = {
+    "donk": "Donk", "zywoo": "ZywOo", "m0nesy": "M0NESY", "s1mple": "S1mple",
+    "niko": "NiKo", "makazze": "Makazze", "broky": "Broky", "karrigan": "Karrigan",
+    "vitality": "Team_Vitality", "team vitality": "Team_Vitality",
+    "navi": "Natus_Vincere", "natus vincere": "Natus_Vincere",
+    "faze": "FaZe_Clan", "g2": "G2_Esports", "mouz": "MOUZ",
+    "spirit": "Team_Spirit", "team spirit": "Team_Spirit",
+    "falcons": "Team_Falcons", "aurora": "Aurora_Gaming", "astralis": "Astralis",
+    "team liquid": "Team_Liquid", "mongolz": "The_MongolZ", "the mongolz": "The_MongolZ",
+}
+_LIQ_UA = "FarmskinsCS2NewsBot/1.0 (Telegram news cards; +https://t.me/farmskins)"
+_liq_cache = {}
+
+
+def _liquipedia_image(name):
+    """og:image of the entity's Liquipedia CS page (CC, attribution). Cached; best-effort."""
+    page = _LIQ_PAGE.get(name)
+    if not page:
+        return None
+    if page in _liq_cache:
+        return _liq_cache[page]
+    url = None
+    try:
+        req = urllib.request.Request("https://liquipedia.net/counterstrike/" + page,
+                                     headers={"User-Agent": _LIQ_UA})
+        with urllib.request.urlopen(req, timeout=12) as r:
+            page_html = r.read().decode("utf-8", "replace")
+        m = re.search(r'<meta property="og:image" content="([^"]+)"', page_html)
+        if m and "/commons/images/" in m.group(1):        # a real photo, not the wiki logo
+            url = m.group(1)
+    except Exception as e:
+        log(f"liquipedia image {page}: {e}")
+    _liq_cache[page] = url
+    return url
+
+
+def resolve_hero(it):
+    """Content-adaptive hero: the news item's own media first (current tournament
+    photo etc.), then a Liquipedia portrait/logo for a named player/team, else None
+    (caller uses the brand-bg card). Never a blind web image (wrong-face risk)."""
+    if it.get("image"):
+        h = _download(it["image"], os.path.join(tempfile.gettempdir(), "fs_hero"))
+        if h:
+            return h
+    name = _highlight(_headline(it))
+    if name:
+        u = _liquipedia_image(name)
+        if u:
+            return _download(u, os.path.join(tempfile.gettempdir(), "fs_hero_liq"))
+    return None
+
+
 def card_texts(it):
     """One cheap structured call → {headline, sub, highlight} for the card.
     Falls back to None (caller uses the raw title) on any issue."""
@@ -615,9 +669,7 @@ def build_and_post(it, caption):
     falls back to a plain text/photo-URL post."""
     if card is None and card_psd is None:
         return False
-    hero = None
-    if it.get("image"):
-        hero = _download(it["image"], os.path.join(tempfile.gettempdir(), "fs_hero"))
+    hero = resolve_hero(it)
     # Already-finished graphic (roster card, busy image)? Post it raw — don't overlay
     # our headline on faces/text. Our copy stays in the caption.
     if hero and card and card.text_zone_busy(hero):
