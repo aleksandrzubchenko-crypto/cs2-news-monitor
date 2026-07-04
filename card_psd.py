@@ -140,17 +140,13 @@ def render(slug, out_path, hero=None, heroes=None, lines=None, team_logo=None, b
     # heroes → фото-слоты (слева-направо). Один hero заполняет все слоты (или единственный).
     slots = zones.get("photo_slots") or [zones["photo_bbox"]]
     imgs = list(heroes) if heroes else ([hero] if hero else [])
-    multi = len(slots) > 1
     for i, slot in enumerate(slots):
         src = imgs[i] if i < len(imgs) else (imgs[-1] if imgs else None)
         if not src:
             continue
         x1, y1, x2, y2 = slot
-        try:
-            if multi:                                   # VS: лого/фото адаптивно
-                _place_slot(canvas, src, (x1, y1, x2, y2))
-            else:                                       # одиночное фото — как раньше
-                canvas.alpha_composite(_cover(src, x2 - x1, y2 - y1), (x1, y1))
+        try:                                            # фото → cover; прозрачное лого → contain на подложке
+            _place_slot(canvas, src, (x1, y1, x2, y2))
         except Exception:
             pass
     # пиксель-перфект рамка PSD поверх фото

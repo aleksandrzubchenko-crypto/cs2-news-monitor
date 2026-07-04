@@ -116,6 +116,20 @@ def is_offtopic(it):
     return any(g in t for g in OTHER_GAMES) or bool(_OTHER_RX.search(t))
 
 
+# Reject spam / auto-generated titles carrying a promo-code or gibberish token
+# (e.g. "4MWFG2RBPG", random upload IDs). Player nicks keep a vowel (s1mple, fl4mus)
+# or are known entities (n0rb3r7 is in _LIQ_PAGE) → kept.
+_VOWELS = set("aeiou")
+def is_spam(it):
+    for tok in re.findall(r"[A-Za-z0-9]{6,}", it["title"]):
+        if tok.lower() in _LIQ_PAGE:                     # a known player/team nick → fine
+            continue
+        if any(c.isalpha() for c in tok) and any(c.isdigit() for c in tok):
+            if not any(c.lower() in _VOWELS for c in tok):   # letters+digits, no vowel → code
+                return True
+    return False
+
+
 # If draft_llm returns one of these (or the SKIP sentinel), do NOT post it.
 _REFUSAL = (
     "skip", "i can't", "i cannot", "isn't cs2", "not cs2", "wrong game",
@@ -560,13 +574,39 @@ def _headline(it):
     return " ".join(t.split()[:14])
 
 
+# extra accent words (maps/keywords) not in the entity map
+_ACCENT_EXTRA = ["cache", "dust2", "mirage", "ancient", "inferno", "nuke", "anubis",
+                 "train", "overpass", "major", "x-ray"]
+_NAME_RX = None
+def _name_patterns():
+    """(key, compiled word-boundary regex) for every _LIQ_PAGE entity, longest key first.
+    Boundaries are non-alphanumeric so 'g2' never matches inside '4mwfg2rbpg'."""
+    global _NAME_RX
+    if _NAME_RX is None:
+        keys = sorted(_LIQ_PAGE.keys(), key=len, reverse=True)
+        _NAME_RX = [(k, re.compile(r"(?<![a-z0-9])" + re.escape(k) + r"(?![a-z0-9])")) for k in keys]
+    return _NAME_RX
+
+
+def _detect_name(text):
+    """Longest entity (from the 167-name map) present in text by WORD BOUNDARY. None if none.
+    Used for both the portrait/logo lookup and the headline accent."""
+    h = (text or "").lower()
+    for k, rx in _name_patterns():
+        if rx.search(h):
+            return k
+    return None
+
+
 def _highlight(headline):
-    h = headline.lower()
-    best = None
-    for n in _HL_NAMES:
-        if n in h and (best is None or len(n) > len(best)):
-            best = n
-    return best
+    n = _detect_name(headline)
+    if n:
+        return n
+    h = (headline or "").lower()
+    for w in sorted(_ACCENT_EXTRA, key=len, reverse=True):
+        if re.search(r"(?<![a-z0-9])" + re.escape(w) + r"(?![a-z0-9])", h):
+            return w
+    return None
 
 
 # Detected name (lowercase) → Liquipedia CS page title, for pulling a real
@@ -626,7 +666,7 @@ _LIQ_PAGE = {
     "kscerato": "KSCERATO", "yuurih": "Yuurih", "aleksib": "Aleksib", "boombl4": "Boombl4",
     "zont1x": "Zont1x", "molodoy": "Molodoy", "kaze": "Kaze", "dupreeh": "Dupreeh",
     "gla1ve": "Gla1ve", "jamyoung": "JamYoung", "starry": "Starry", "emiliaqaq": "EmiliaQAQ",
-    "attacker": "Attacker",
+    "attacker": "Attacker", "fl4mus": "FL4MUS", "phantom": "Phantom_Esports",
 }
 _LIQ_UA = "FarmskinsCS2NewsBot/1.0 (Telegram news cards; +https://t.me/farmskins)"
 _liq_cache = {}
@@ -683,7 +723,7 @@ def resolve_hero(it):
         h = _download(it["image"], os.path.join(tempfile.gettempdir(), "fs_hero"))
         if h:
             return h
-    name = _highlight(_headline(it))
+    name = _detect_name(_headline(it))           # portrait/logo over the full 167-name map
     if name:
         u = _liquipedia_image(name)
         if u:
@@ -749,6 +789,24 @@ def card_texts(it):
         return None
 
 
+_LIVE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "templates", "_live")
+_LIVE_KEEP = 10
+
+
+def _save_live(card_path):
+    """Keep the last N rendered cards in the repo for visual review (committed back by CI)."""
+    try:
+        import shutil
+        os.makedirs(_LIVE_DIR, exist_ok=True)
+        ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+        shutil.copyfile(card_path, os.path.join(_LIVE_DIR, f"card_{ts}.png"))
+        cards = sorted(f for f in os.listdir(_LIVE_DIR) if f.startswith("card_") and f.endswith(".png"))
+        for old in cards[:-_LIVE_KEEP]:
+            os.remove(os.path.join(_LIVE_DIR, old))
+    except Exception as e:
+        log(f"live-save error: {e}")
+
+
 def build_and_post(it, caption):
     """Render a branded card for the item and post it as a photo. False → caller
     falls back to a plain text/photo-URL post."""
@@ -785,6 +843,7 @@ def build_and_post(it, caption):
                     card_psd.render("photo2", out, heroes=[h1, h2],
                                     lines=tpl.build_lines("photo2", {**fields, "highlight": "VS"}))
                     _upload_photo(out, caption)
+                    _save_live(out)
                     return True
                 except Exception as e:
                     log(f"card_psd VS error: {e}")
@@ -796,6 +855,7 @@ def build_and_post(it, caption):
             try:
                 card_psd.render(slug, out, hero=hero, lines=tpl.build_lines(slug, fields))
                 _upload_photo(out, caption)
+                _save_live(out)
                 return True
             except Exception as e:
                 log(f"card_psd error (fallback to brand card): {e}")
@@ -807,6 +867,7 @@ def build_and_post(it, caption):
         card.make_card(hl, out, highlight=highlight, hero=hero,
                        seed=abs(hash(it["id"])) % 9999, sub=sub)
         _upload_photo(out, caption)
+        _save_live(out)
         return True
     except Exception as e:
         log(f"card build/post error: {e}")
@@ -842,8 +903,25 @@ def save_topics(topics):
         json.dump(topics[-120:], f)
 
 
+# Generic patch/update notes ("New CS2 update", "no release notes") arrive from many
+# sources — collapse them into ONE canonical topic so we don't post the same patch 5×.
+_GENERIC_UPDATE = re.compile(r"\b(update|patch|hotfix)\b", re.I)
+_SPECIFIC_SUBJECT = re.compile(
+    r"\b(dust\s?2|mirage|inferno|nuke|ancient|anubis|train|overpass|vertigo|office|italy|"
+    r"operation|armory|case|skin|sticker|charm|map\s?pool|premier|rank|matchmaking)\b", re.I)
+
+
+def canon_topic(title):
+    """Story signature; generic update/patch notes with no specific subject → one topic."""
+    if _GENERIC_UPDATE.search(title) and not _SPECIFIC_SUBJECT.search(title):
+        return ["__cs2_generic_update__"]
+    return topic_sig(title)
+
+
 def is_dup_topic(sig, topics):
     s = set(sig)
+    if len(s) == 1 and next(iter(s)).startswith("__"):   # canonical single-topic marker
+        return any(set(p) == s for p in topics)
     if len(s) < 2:
         return False
     for past in topics:
@@ -881,7 +959,7 @@ def run_once():
     # new + newsworthy, best first
     fresh = [it for it in items if it["id"] not in seen]
     scored = [(score_item(it), it) for it in fresh
-              if not is_blocked(it) and not is_offtopic(it)]
+              if not is_blocked(it) and not is_offtopic(it) and not is_spam(it)]
     picks = [it for s, it in sorted(scored, key=lambda x: -x[0]) if s >= MIN_SCORE]
 
     topics = load_topics()
@@ -890,7 +968,7 @@ def run_once():
     for it in picks:
         if posted >= MAX_POSTS_PER_RUN:
             break            # remaining newsworthy picks stay eligible next run
-        sig = topic_sig(it["title"])
+        sig = canon_topic(it["title"])
         if is_dup_topic(sig, topics):        # same story already covered → skip
             log(f"skip dup [{category(it)}] {it['title'][:70]}")
             handled.add(it["id"])
