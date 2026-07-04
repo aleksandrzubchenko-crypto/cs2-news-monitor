@@ -1,0 +1,76 @@
+{
+  "canvas": [
+    1080,
+    1080
+  ],
+  "photo_bbox": [
+    0,
+    49,
+    1077,
+    673
+  ],
+  "texts": [
+    {
+      "name": "Is it now possible to smoke at the majors?",
+      "bbox": [
+        64,
+        741,
+        1018,
+        772
+      ],
+      "font_px": 45,
+      "nlines": 1,
+      "color": [
+        255,
+        255,
+        255
+      ],
+      "align": "center",
+      "sample": "Is it now possible to smoke at the majors?"
+    },
+    {
+      "name": "w — There's nothing wrong with that l — No, it's prohibited eve",
+      "bbox": [
+        109,
+        828,
+        679,
+        892
+      ],
+      "font_px": 31,
+      "nlines": 2,
+      "color": [
+        255,
+        255,
+        255
+      ],
+      "align": "left",
+      "sample": "w — There's nothing wrong with that\rl — No, it's prohibited everywhere"
+    },
+    {
+      "name": "Snus is the only nicotine product permitted for consumption.",
+      "bbox": [
+        192,
+        970,
+        890,
+        986
+      ],
+      "font_px": 24,
+      "nlines": 1,
+      "color": [
+        255,
+        255,
+        255
+      ],
+      "align": "left",
+      "sample": "Snus is the only nicotine product permitted for consumption."
+    }
+  ],
+  "team_logo_slot": [
+    497,
+    946,
+    579,
+    1045
+  ],
+  "slug": "base",
+  "source_psd": "База.psd"
+}

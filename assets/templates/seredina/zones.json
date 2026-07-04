@@ -1,0 +1,58 @@
+{
+  "canvas": [
+    1080,
+    1080
+  ],
+  "photo_bbox": [
+    0,
+    309,
+    1080,
+    834
+  ],
+  "texts": [
+    {
+      "name": "As a true falcons fan, I kept my promise and planted the first ",
+      "bbox": [
+        123,
+        121,
+        952,
+        252
+      ],
+      "font_px": 42,
+      "nlines": 3,
+      "color": [
+        255,
+        255,
+        255
+      ],
+      "align": "center",
+      "sample": "As a true falcons fan, I kept my promise\rand planted the first tree in honor of\r"
+    },
+    {
+      "name": "Reddit user",
+      "bbox": [
+        420,
+        859,
+        671,
+        888
+      ],
+      "font_px": 43,
+      "nlines": 1,
+      "color": [
+        255,
+        204,
+        0
+      ],
+      "align": "center",
+      "sample": "Reddit user"
+    }
+  ],
+  "team_logo_slot": [
+    483,
+    917,
+    597,
+    1056
+  ],
+  "slug": "seredina",
+  "source_psd": "Середина.psd"
+}

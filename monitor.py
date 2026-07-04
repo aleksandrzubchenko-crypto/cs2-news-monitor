@@ -27,9 +27,14 @@ import os, json, time, html, re, sys, hashlib, tempfile
 from datetime import datetime, timezone
 import urllib.request, urllib.error, urllib.parse
 try:
-    import card                     # Pillow-based branded card renderer
+    import card                     # Pillow-based branded card renderer (fallback)
 except Exception:
     card = None
+try:
+    import card_psd                 # pixel-perfect PSD-template renderer
+    import templates as tpl         # card-type → PSD template registry
+except Exception:
+    card_psd = tpl = None
 
 def _load_dotenv(path=".env"):
     """Minimal .env loader (no external deps). Existing env vars win."""
@@ -564,31 +569,96 @@ def _highlight(headline):
     return best
 
 
+def card_texts(it):
+    """One cheap structured call → {headline, sub, highlight} for the card.
+    Falls back to None (caller uses the raw title) on any issue."""
+    key = os.getenv("ANTHROPIC_API_KEY")
+    if not key:
+        return None
+    try:
+        prompt = ('For this CS2 news, output STRICT minified JSON with keys: '
+                  '"card_type" (one of: news, quote, poll, update — quote if it centers on '
+                  "someone's statement; poll only if it's a genuine W-or-L debate; update for "
+                  'patch/map/skin/workshop; else news), '
+                  '"headline" (a punchy card title, MAX 7 words), '
+                  '"sub" (one plain restatement line, MAX 10 words), '
+                  '"highlight" (the single most important name/word to accent), '
+                  '"attribution" (for quote: who said it, e.g. "ZYWOO" or "REDDIT USER"; else ""), '
+                  '"wl_w" (for poll only: the "W" stance, MAX 6 words; else ""), '
+                  '"wl_l" (for poll only: the "L" stance, MAX 6 words; else ""). '
+                  'English. No text outside the JSON. News: "' + it["title"] + '".')
+        body = json.dumps({"model": "claude-sonnet-4-6", "max_tokens": 240,
+                           "messages": [{"role": "user", "content": prompt}]}).encode()
+        req = urllib.request.Request(
+            "https://api.anthropic.com/v1/messages", data=body,
+            headers={"x-api-key": key, "anthropic-version": "2023-06-01",
+                     "content-type": "application/json"})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            resp = json.loads(r.read())
+        txt = "".join(b.get("text", "") for b in resp.get("content", []))
+        m = re.search(r"\{.*\}", txt, re.S)
+        data = json.loads(m.group(0)) if m else {}
+        hl = (data.get("headline") or "").strip()
+        if not hl:
+            return None
+        g = lambda k: (data.get(k) or "").strip() or None
+        return {"headline": hl, "sub": g("sub"), "highlight": g("highlight"),
+                "card_type": g("card_type") or "news", "attribution": g("attribution"),
+                "wl_w": g("wl_w"), "wl_l": g("wl_l")}
+    except Exception as e:
+        log(f"card_texts error (fallback to title): {e}")
+        return None
+
+
 def build_and_post(it, caption):
     """Render a branded card for the item and post it as a photo. False → caller
     falls back to a plain text/photo-URL post."""
-    if card is None:
+    if card is None and card_psd is None:
         return False
     hero = None
     if it.get("image"):
         hero = _download(it["image"], os.path.join(tempfile.gettempdir(), "fs_hero"))
     # Already-finished graphic (roster card, busy image)? Post it raw — don't overlay
     # our headline on faces/text. Our copy stays in the caption.
-    if hero and card.text_zone_busy(hero):
+    if hero and card and card.text_zone_busy(hero):
         try:
             _upload_photo(hero, caption)
             return True
         except Exception as e:
             log(f"raw hero post error: {e}")
-    hl = _headline(it)
+    ct = card_texts(it)
+    hl = (ct["headline"] if ct else "") or _headline(it)
     if not hl:
         return False
+    sub = ct.get("sub") if ct else None
+    highlight = (ct.get("highlight") if ct else None) or _highlight(hl)
     out = os.path.join(tempfile.gettempdir(), "fs_card.png")
-    label = {"roster": "TRANSFER", "results": "RESULTS", "skins": "SKINS",
-             "update": "UPDATE", "news": "NEWS"}.get(category(it), "NEWS")
+
+    # ── pixel-perfect PSD template (preferred) ──────────────────────────────
+    # Templates expect a real photo; without a hero we fall back to the brand card.
+    if card_psd and tpl and hero:
+        try:
+            slug = tpl.resolve_slug(ct.get("card_type") if ct else "news")
+            fields = {
+                "headline": hl, "highlight": highlight or "", "sub": sub or "",
+                "attribution": (ct.get("attribution") if ct else None) or "",
+                "wl_w": (ct.get("wl_w") if ct else None) or "",
+                "wl_l": (ct.get("wl_l") if ct else None) or "",
+            }
+            if slug == "base" and not (fields["wl_w"] and fields["wl_l"]):
+                slug = "seredina"                     # poll без вариантов → обычная новость
+            card_psd.render(slug, out, hero=hero, lines=tpl.build_lines(slug, fields))
+            _upload_photo(out, caption)
+            return True
+        except Exception as e:
+            log(f"card_psd error (fallback to brand card): {e}")
+
+    # ── fallback: Pillow brand card ─────────────────────────────────────────
+    if card is None:
+        return False
     try:
-        card.make_card(hl, out, highlight=_highlight(hl), hero=hero,
-                       seed=abs(hash(it["id"])) % 9999, category=label)
+        card.make_card(hl, out, highlight=highlight, hero=hero,
+                       seed=abs(hash(it["id"])) % 9999, sub=sub)
         _upload_photo(out, caption)
         return True
     except Exception as e:

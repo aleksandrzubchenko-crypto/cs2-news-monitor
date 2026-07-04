@@ -1,0 +1,58 @@
+{
+  "canvas": [
+    1080,
+    1080
+  ],
+  "photo_bbox": [
+    147,
+    181,
+    932,
+    966
+  ],
+  "texts": [
+    {
+      "name": "New dust 2 update",
+      "bbox": [
+        235,
+        99,
+        840,
+        145
+      ],
+      "font_px": 65,
+      "nlines": 1,
+      "color": [
+        255,
+        255,
+        255
+      ],
+      "align": "center",
+      "sample": "New dust 2 update"
+    },
+    {
+      "name": "Apex on the news about adding cache",
+      "bbox": [
+        638,
+        810,
+        945,
+        821
+      ],
+      "font_px": 16,
+      "nlines": 1,
+      "color": [
+        255,
+        196,
+        0
+      ],
+      "align": "center",
+      "sample": "Apex on the news about adding cache"
+    }
+  ],
+  "team_logo_slot": [
+    464,
+    825,
+    618,
+    1017
+  ],
+  "slug": "update",
+  "source_psd": "Апдейт.psd"
+}

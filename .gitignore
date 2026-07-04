@@ -5,3 +5,7 @@ __pycache__/
 *.pyc
 # card renderer test output (runtime uses the temp dir, not the repo)
 /card_test.png
+
+# card template test artifacts
+assets/templates/*/_preview*.png
+assets/templates/*/_check*.png

@@ -71,72 +71,98 @@ def text_zone_busy(hero_path, y0=0.60, thresh=20.0):
         return False
 
 
-def make_card(headline, out_path, highlight=None, hero=None, seed=0, category=None):
-    img = _cover(hero) if hero else None
-    if img is None:
-        img = _brand_bg(seed)
+def _line_to_img(tokens, font, sp):
+    """Render one line of (word, color) tokens to a tight RGBA image."""
+    asc, desc = font.getmetrics(); h = asc + desc
+    w = int(sum(t[2] for t in tokens) + sp * max(len(tokens) - 1, 0)) + 6
+    im = Image.new("RGBA", (max(w, 1), h + 8), (0, 0, 0, 0))
+    dd = ImageDraw.Draw(im); x = 0
+    for word, col, ww in tokens:
+        dd.text((x, 0), word, font=font, fill=col); x += ww + sp
+    return im
+
+
+def _italic(im, k=0.20):
+    w, h = im.size; ext = int(h * k)
+    return im.transform((w + ext, h), Image.AFFINE, (1, k, -ext, 0, 1, 0), resample=Image.BICUBIC)
+
+
+def _paste_center(base, line_im, y):
+    base.paste(line_im, ((S - line_im.width) // 2, y), line_im)
+
+
+def make_card(headline, out_path, highlight=None, hero=None, seed=0, category=None, sub=None,
+              team_logo=None):
+    img = _cover(hero) if hero else _brand_bg(seed)
     d = ImageDraw.Draw(img, "RGBA")
 
     # top watermark strip
     d.rectangle([0, 0, S, 52], fill=(0, 0, 0, 120))
     d.text((16, 14), ("#ESPORTS      FARMSKINS NEWS      ") * 2, font=_mont(20), fill=(255, 255, 255, 55))
 
-    # headline layout (Burbank, autofit + wrap); words inside `highlight` are yellow
+    # headline layout (centered, autofit); words inside `highlight` are yellow
     hlset = set((highlight or "").upper().split())
     words = [(w, YELLOW if w.upper().strip(".,!?") in hlset else WHITE) for w in headline.upper().split()]
-    maxw = S - 120
-    for size in range(96, 40, -4):
+    maxw = S - 150
+    for size in range(92, 40, -4):
         f = _burb(size); sp = d.textlength(" ", font=f); lines = [[]]; wln = 0
         for w, c in words:
             ww = d.textlength(w, font=f)
             if wln + ww > maxw and lines[-1]:
                 lines.append([]); wln = 0
             lines[-1].append((w, c, ww)); wln += ww + sp
-        if len(lines) * (size + 8) <= 300:
+        if len(lines) * (size + 12) <= 250:
             break
     f = _burb(size); sp = d.textlength(" ", font=f)
-    y = S - 150 - len(lines) * (size + 8)
+    line_h = size + 12
+    extra = (46 if sub else 0) + (96 if team_logo else 0)
+    block_h = len(lines) * line_h + extra
+    panel_top = S - 130 - block_h
 
-    # Text/image separation (matches template): soft gradient fade into a dark
-    # bottom band. Image reads on top; text reads on the dark band below.
-    panel_top = y - (92 if category else 26)
-    band = Image.new("RGBA", (S, S), (0, 0, 0, 0)); bd = ImageDraw.Draw(band)
-    grad = 140
+    # BLUE gradient bottom panel (matches template) + soft blue glow
+    panel = Image.new("RGBA", (S, S), (0, 0, 0, 0)); pd = ImageDraw.Draw(panel)
+    grad = 150
     for i in range(grad):
-        bd.line([(0, panel_top - grad + i), (S, panel_top - grad + i)],
-                fill=(18, 20, 28, int(236 * i / grad)))
-    bd.rectangle([0, panel_top, S, S], fill=(18, 20, 28, 236))
-    img = Image.alpha_composite(img.convert("RGBA"), band).convert("RGB")
+        pd.line([(0, panel_top - grad + i), (S, panel_top - grad + i)], fill=(14, 22, 46, int(238 * i / grad)))
+    pd.rectangle([0, panel_top, S, S], fill=(14, 22, 46, 238))
+    glow = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    ImageDraw.Draw(glow).ellipse([int(S * 0.18), panel_top + 20, int(S * 0.82), S + 130], fill=(38, 92, 210, 70))
+    panel = Image.alpha_composite(panel, glow.filter(ImageFilter.GaussianBlur(95)))
+    img = Image.alpha_composite(img.convert("RGBA"), panel).convert("RGB")
     d = ImageDraw.Draw(img, "RGBA")
 
-    # category chip (angular white banner) above the headline
-    if category:
-        cf = _mont(28); lbl = category.upper(); tw = d.textlength(lbl, font=cf)
-        cx0, cy0 = 60, y - 74
-        d.polygon([(cx0, cy0), (cx0 + tw + 74, cy0), (cx0 + tw + 52, cy0 + 52), (cx0, cy0 + 52)], fill=WHITE)
-        d.rectangle([cx0, cy0 + 52, cx0 + 46, cy0 + 58], fill=YELLOW)
-        d.text((cx0 + 26, cy0 + 12), lbl, font=cf, fill=(24, 26, 34))
+    # centered italic headline
+    y = panel_top + 46
     for ln in lines:
-        x = 60
-        for w, c, ww in ln:
-            d.text((x, y), w, font=f, fill=c); x += ww + sp
-        y += size + 8
+        _paste_center(img, _italic(_line_to_img(ln, f, int(sp))), y); y += line_h
+    # centered italic sub-line
+    if sub:
+        sf = _mont(30); st = sub.upper()
+        _paste_center(img, _italic(_line_to_img([(st, (205, 216, 238), d.textlength(st, font=sf))], sf, 0), k=0.16), y + 8)
+        y += 52
+    # centered team logo (if provided)
+    if team_logo:
+        try:
+            tl = Image.open(team_logo).convert("RGBA"); th = 70
+            tl = tl.resize((int(tl.width * th / tl.height), th))
+            img.paste(tl, ((S - tl.width) // 2, y + 10), tl)
+        except Exception:
+            pass
 
-    # bottom-left watermark
+    # bottom-left watermark + Farmskins logo bottom-right
     d.text((60, S - 58), "T.ME / FARMSKINS", font=_mont(22), fill=GREY)
-    # logo bottom-right
     try:
-        logo = Image.open(LOGO_WHITE).convert("RGBA"); lw = 250
+        logo = Image.open(LOGO_WHITE).convert("RGBA"); lw = 235
         logo = logo.resize((lw, int(logo.height * lw / logo.width)))
         img.paste(logo, (S - lw - 46, S - logo.height - 40), logo)
     except Exception:
         pass
 
-    # corner bracket accents (subtle "designed" frame)
+    # corner bracket accents
     br, cw = 42, 3
-    for x, y, dx, dy in [(34, 34, 1, 1), (S - 34, 34, -1, 1), (34, S - 34, 1, -1), (S - 34, S - 34, -1, -1)]:
-        d.line([(x, y), (x + dx * br, y)], fill=(255, 255, 255, 110), width=cw)
-        d.line([(x, y), (x, y + dy * br)], fill=(255, 255, 255, 110), width=cw)
+    for x, yy, dx, dy in [(34, 34, 1, 1), (S - 34, 34, -1, 1), (34, S - 34, 1, -1), (S - 34, S - 34, -1, -1)]:
+        d.line([(x, yy), (x + dx * br, yy)], fill=(255, 255, 255, 110), width=cw)
+        d.line([(x, yy), (x, yy + dy * br)], fill=(255, 255, 255, 110), width=cw)
 
     img.save(out_path, "PNG")
     return out_path
@@ -145,6 +171,6 @@ def make_card(headline, out_path, highlight=None, hero=None, seed=0, category=No
 if __name__ == "__main__":
     import tempfile
     p = os.path.join(tempfile.gettempdir(), "fs_card_test.png")
-    make_card("BetBoom have no plans to buy out fl4mus, contract runs to 2029",
-              p, highlight="BetBoom", category="TRANSFER")
+    make_card("Aurora signed ash", p, highlight="ash",
+              sub="ash becomes Aurora's new coach")
     print("rendered", p)
