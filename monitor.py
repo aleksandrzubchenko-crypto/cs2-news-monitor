@@ -579,14 +579,46 @@ _LIQ_PAGE = {
     "faze": "FaZe_Clan", "g2": "G2_Esports", "mouz": "MOUZ",
     "spirit": "Team_Spirit", "team spirit": "Team_Spirit",
     "falcons": "Team_Falcons", "aurora": "Aurora_Gaming", "astralis": "Astralis",
-    "team liquid": "Team_Liquid", "mongolz": "The_MongolZ", "the mongolz": "The_MongolZ",
+    "team liquid": "Team_Liquid", "liquid": "Team_Liquid",
+    "mongolz": "The_MongolZ", "the mongolz": "The_MongolZ",
+    # extended team library (verify exact Liquipedia CS page titles on host; wrong = safe no-op)
+    "furia": "FURIA", "heroic": "Heroic", "ence": "ENCE", "cloud9": "Cloud9", "c9": "Cloud9",
+    "big": "BIG", "fnatic": "Fnatic", "virtus.pro": "Virtus.pro", "vp": "Virtus.pro",
+    "gamerlegion": "GamerLegion", "eternal fire": "Eternal_Fire", "3dmax": "3DMAX",
+    "tyloo": "TYLOO", "complexity": "Complexity", "pain": "paiN_Gaming", "9z": "9z",
+    "monte": "Monte", "nip": "Ninjas_in_Pyjamas", "ninjas in pyjamas": "Ninjas_in_Pyjamas",
+    "imperial": "Imperial", "saw": "SAW", "lynn vision": "Lynn_Vision", "wildcard": "Wildcard",
+    "m80": "M80", "nrg": "NRG", "passion ua": "Passion_UA", "b8": "B8",
+    # extra stars
+    "ropz": "Ropz", "sh1ro": "Sh1ro", "hobbit": "HObbit", "twistzz": "Twistzz",
+    "electronic": "Electronic", "b1t": "B1t", "jl": "JL", "magixx": "Magixx",
+    "frozen": "Frozen", "xantares": "XANTARES", "brollan": "Brollan", "w0nderful": "W0nderful",
 }
 _LIQ_UA = "FarmskinsCS2NewsBot/1.0 (Telegram news cards; +https://t.me/farmskins)"
 _liq_cache = {}
 
 
+def _infobox_logo(page_html, page):
+    """Fallback when a Liquipedia page has no og:image: pick the infobox commons image
+    whose filename carries the entity token (e.g. FaZe_… on FaZe_Clan), expand /thumb/."""
+    token = re.split(r"[_\s]", page)[0].lower()
+    imgs = re.findall(r"/commons/images/[^\s\"'<>]+\.(?:png|jpg|jpeg)", page_html)
+    if not imgs:
+        return None
+    pool = [u for u in imgs if token and token in u.rsplit("/", 1)[-1].lower()] or imgs
+    def score(u):
+        fn = u.rsplit("/", 1)[-1].lower()
+        return (3 if "allmode" in fn else 2 if "darkmode" in fn else 1 if "lightmode" in fn else 0)
+    best = max(pool, key=score)
+    m = re.match(r"(.*/commons/images)/thumb/(.+\.(?:png|jpg|jpeg))/[^/]+$", best)
+    if m:
+        best = m.group(1) + "/" + m.group(2)             # /thumb/…/NNpx-File → full-size
+    return ("https://liquipedia.net" + best) if best.startswith("/") else best
+
+
 def _liquipedia_image(name):
-    """og:image of the entity's Liquipedia CS page (CC, attribution). Cached; best-effort."""
+    """Entity image from its Liquipedia CS page (CC, attribution). og:image first, else
+    infobox logo. Cached; best-effort."""
     page = _LIQ_PAGE.get(name)
     if not page:
         return None
@@ -601,6 +633,8 @@ def _liquipedia_image(name):
         m = re.search(r'<meta property="og:image" content="([^"]+)"', page_html)
         if m and "/commons/images/" in m.group(1):        # a real photo, not the wiki logo
             url = m.group(1)
+        if not url:                                       # no og:image → infobox logo
+            url = _infobox_logo(page_html, page)
     except Exception as e:
         log(f"liquipedia image {page}: {e}")
     _liq_cache[page] = url
@@ -623,6 +657,19 @@ def resolve_hero(it):
     return None
 
 
+def _team_hero(name):
+    """Team logo/photo via Liquipedia (CC, attribution). Tries full name then tokens,
+    so 'G2 Esports' → 'g2'. None if the team isn't in the name map."""
+    if not name:
+        return None
+    for c in [name.strip().lower()] + [t.lower() for t in name.split()]:
+        u = _liquipedia_image(c)
+        if u:
+            tag = re.sub(r"\W+", "", c)[:12] or "team"
+            return _download(u, os.path.join(tempfile.gettempdir(), "fs_vs_" + tag))
+    return None
+
+
 def card_texts(it):
     """One cheap structured call → {headline, sub, highlight} for the card.
     Falls back to None (caller uses the raw title) on any issue."""
@@ -631,7 +678,8 @@ def card_texts(it):
         return None
     try:
         prompt = ('For this CS2 news, output STRICT minified JSON with keys: '
-                  '"card_type" (one of: news, quote, poll, update — quote if it centers on '
+                  '"card_type" (one of: news, quote, poll, update, vs — vs ONLY for a '
+                  'head-to-head match RESULT between two named teams; quote if it centers on '
                   "someone's statement; poll only if it's a genuine W-or-L debate; update for "
                   'patch/map/skin/workshop; else news), '
                   '"headline" (a punchy card title, MAX 7 words), '
@@ -639,7 +687,9 @@ def card_texts(it):
                   '"highlight" (the single most important name/word to accent), '
                   '"attribution" (for quote: who said it, e.g. "ZYWOO" or "REDDIT USER"; else ""), '
                   '"wl_w" (for poll only: the "W" stance, MAX 6 words; else ""), '
-                  '"wl_l" (for poll only: the "L" stance, MAX 6 words; else ""). '
+                  '"wl_l" (for poll only: the "L" stance, MAX 6 words; else ""), '
+                  '"team1"/"team2" (for vs only: the two team names, e.g. "G2"/"Spirit"; else ""), '
+                  '"score" (for vs only: the map/series score, e.g. "16:13" or "2:1"; else ""). '
                   'English. No text outside the JSON. News: "' + it["title"] + '".')
         body = json.dumps({"model": "claude-sonnet-4-6", "max_tokens": 240,
                            "messages": [{"role": "user", "content": prompt}]}).encode()
@@ -658,7 +708,8 @@ def card_texts(it):
         g = lambda k: (data.get(k) or "").strip() or None
         return {"headline": hl, "sub": g("sub"), "highlight": g("highlight"),
                 "card_type": g("card_type") or "news", "attribution": g("attribution"),
-                "wl_w": g("wl_w"), "wl_l": g("wl_l")}
+                "wl_w": g("wl_w"), "wl_l": g("wl_l"),
+                "team1": g("team1"), "team2": g("team2"), "score": g("score")}
     except Exception as e:
         log(f"card_texts error (fallback to title): {e}")
         return None
@@ -685,25 +736,35 @@ def build_and_post(it, caption):
     sub = ct.get("sub") if ct else None
     highlight = (ct.get("highlight") if ct else None) or _highlight(hl)
     out = os.path.join(tempfile.gettempdir(), "fs_card.png")
+    g = (lambda k: (ct.get(k) if ct else None) or "")
+    fields = {"headline": hl, "highlight": highlight or "", "sub": sub or "",
+              "attribution": g("attribution"), "wl_w": g("wl_w"), "wl_l": g("wl_l"),
+              "team1": g("team1"), "team2": g("team2"), "score": g("score")}
+    slug = tpl.resolve_slug(ct.get("card_type") if ct else "news") if tpl else None
 
-    # ── pixel-perfect PSD template (preferred) ──────────────────────────────
-    # Templates expect a real photo; without a hero we fall back to the brand card.
-    if card_psd and tpl and hero:
-        try:
-            slug = tpl.resolve_slug(ct.get("card_type") if ct else "news")
-            fields = {
-                "headline": hl, "highlight": highlight or "", "sub": sub or "",
-                "attribution": (ct.get("attribution") if ct else None) or "",
-                "wl_w": (ct.get("wl_w") if ct else None) or "",
-                "wl_l": (ct.get("wl_l") if ct else None) or "",
-            }
+    if card_psd and tpl:
+        # ── VS (photo2): два фото-слота = два лого команд (Liquipedia) ──────
+        if slug == "photo2":
+            h1, h2 = _team_hero(fields["team1"]), _team_hero(fields["team2"])
+            if h1 and h2:
+                try:
+                    card_psd.render("photo2", out, heroes=[h1, h2],
+                                    lines=tpl.build_lines("photo2", {**fields, "highlight": "VS"}))
+                    _upload_photo(out, caption)
+                    return True
+                except Exception as e:
+                    log(f"card_psd VS error: {e}")
+            slug = "seredina"                         # не собрали обе команды → обычная новость
+        # ── single-hero PSD templates ──────────────────────────────────────
+        if hero:
             if slug == "base" and not (fields["wl_w"] and fields["wl_l"]):
                 slug = "seredina"                     # poll без вариантов → обычная новость
-            card_psd.render(slug, out, hero=hero, lines=tpl.build_lines(slug, fields))
-            _upload_photo(out, caption)
-            return True
-        except Exception as e:
-            log(f"card_psd error (fallback to brand card): {e}")
+            try:
+                card_psd.render(slug, out, hero=hero, lines=tpl.build_lines(slug, fields))
+                _upload_photo(out, caption)
+                return True
+            except Exception as e:
+                log(f"card_psd error (fallback to brand card): {e}")
 
     # ── fallback: Pillow brand card ─────────────────────────────────────────
     if card is None:

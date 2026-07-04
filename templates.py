@@ -15,7 +15,8 @@ card_psd.render. Поля берутся из структурированног
 """
 
 # набор, разрешённый в ротацию (у остальных папок зоны/фото ещё не доведены)
-ENABLED = ("base", "quote", "seredina", "update")
+# photo2 (VS) включён: монитор резолвит 2 лого команд, иначе уходит в seredina.
+ENABLED = ("base", "quote", "seredina", "update", "photo2")
 
 
 def _wl(f):

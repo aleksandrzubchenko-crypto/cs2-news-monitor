@@ -39,6 +39,23 @@ def _cover(path, w, h):
     return im.crop((x, 0, x + w, h))
 
 
+def _place_slot(canvas, path, slot):
+    """Слот в мульти-фото (VS): прозрачное лого → contain-fit по центру на адаптивной
+    подложке (тёмное лого → светлая, светлое → тёмная); непрозрачное фото → cover-fit."""
+    x1, y1, x2, y2 = slot; w, h = x2 - x1, y2 - y1
+    im = Image.open(path).convert("RGBA")
+    if im.split()[-1].getextrema()[0] >= 245:                 # непрозрачное → фото
+        canvas.alpha_composite(_cover(path, w, h), (x1, y1)); return
+    op = [p for p in im.getdata() if p[3] > 128]
+    lum = sum(0.299 * p[0] + 0.587 * p[1] + 0.114 * p[2] for p in op) / max(len(op), 1) if op else 128
+    panel = (236, 239, 244, 255) if lum < 128 else (26, 28, 38, 255)
+    tile = Image.new("RGBA", (w, h), panel)
+    r = min(w / im.width, h / im.height) * 0.68               # паддинг вокруг лого
+    lo = im.resize((max(int(im.width * r), 1), max(int(im.height * r), 1)))
+    tile.alpha_composite(lo, ((w - lo.width) // 2, (h - lo.height) // 2))
+    canvas.alpha_composite(tile, (x1, y1))
+
+
 def _fit(im):  # 0.62 ~ шрифт крупнее bbox: используем ширину для автоподгона
     return im
 
@@ -123,13 +140,17 @@ def render(slug, out_path, hero=None, heroes=None, lines=None, team_logo=None, b
     # heroes → фото-слоты (слева-направо). Один hero заполняет все слоты (или единственный).
     slots = zones.get("photo_slots") or [zones["photo_bbox"]]
     imgs = list(heroes) if heroes else ([hero] if hero else [])
+    multi = len(slots) > 1
     for i, slot in enumerate(slots):
         src = imgs[i] if i < len(imgs) else (imgs[-1] if imgs else None)
         if not src:
             continue
         x1, y1, x2, y2 = slot
         try:
-            canvas.alpha_composite(_cover(src, x2 - x1, y2 - y1), (x1, y1))
+            if multi:                                   # VS: лого/фото адаптивно
+                _place_slot(canvas, src, (x1, y1, x2, y2))
+            else:                                       # одиночное фото — как раньше
+                canvas.alpha_composite(_cover(src, x2 - x1, y2 - y1), (x1, y1))
         except Exception:
             pass
     # пиксель-перфект рамка PSD поверх фото
