@@ -616,6 +616,17 @@ _LIQ_PAGE = {
     "perfecto": "Perfecto", "jame": "Jame", "n0rb3r7": "N0rb3r7", "fl1t": "Fl1t",
     "biguzera": "Biguzera", "saffee": "Saffee", "yekindar": "YEKINDAR", "bymas": "Bymas",
     "woxic": "Woxic", "xertion": "XertioN", "maj3r": "MAJ3R", "wicadia": "Wicadia",
+    # ── 2026-scene additions (all live-verified on Liquipedia) ──
+    "k27": "K27", "alliance": "Alliance", "bc.game": "BC.Game_Esports", "kvem": "Kvem",
+    "mutiris": "MUTiRiS", "parivision": "PARIVISION", "gun5": "GUN5_Esports",
+    "fire flux": "Fire_Flux_Esports", "oddik": "ODDIK", "sashi": "Sashi_Esport",
+    "ihc": "IHC_Esports", "partizan": "Partizan_Esports", "bad news eagles": "Bad_News_Eagles",
+    "nouns": "Nouns_Esports", "nexus": "Nexus_Gaming",
+    "clax": "Clax", "nicoodoz": "Nicoodoz", "ash": "Ash", "fallen": "FalleN",
+    "kscerato": "KSCERATO", "yuurih": "Yuurih", "aleksib": "Aleksib", "boombl4": "Boombl4",
+    "zont1x": "Zont1x", "molodoy": "Molodoy", "kaze": "Kaze", "dupreeh": "Dupreeh",
+    "gla1ve": "Gla1ve", "jamyoung": "JamYoung", "starry": "Starry", "emiliaqaq": "EmiliaQAQ",
+    "attacker": "Attacker",
 }
 _LIQ_UA = "FarmskinsCS2NewsBot/1.0 (Telegram news cards; +https://t.me/farmskins)"
 _liq_cache = {}
