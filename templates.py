@@ -41,10 +41,12 @@ BUILDERS = {
     "update": lambda f: [
         {"text": f.get("headline", ""), "highlight": f.get("highlight", "")},
     ],
-    # VS / матч-результат: 2 фото-слота (команды), зоны [заголовок VS, счёт, саб]
+    # VS / матч-результат: 2 фото-слота (команды), зоны [заголовок VS, счёт, саб].
+    # Заголовок = «TEAM1 VS TEAM2» (остроумная фраза идёт в подпись поста, не на карту);
+    # жёлтым подсвечиваем ИМЕНА команд (не литерал VS).
     "photo2": lambda f: [
-        {"text": f.get("headline") or f"{f.get('team1','')} VS {f.get('team2','')}".strip(),
-         "highlight": f.get("highlight", "VS")},
+        {"text": f"{f.get('team1','')} VS {f.get('team2','')}".strip(),
+         "highlight": (f.get("team1", "") + " " + f.get("team2", "")).strip()},
         {"text": f.get("score", "")},
         {"text": f.get("sub", "")},
     ],

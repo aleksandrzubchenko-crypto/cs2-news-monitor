@@ -841,7 +841,7 @@ def build_and_post(it, caption):
             if h1 and h2:
                 try:
                     card_psd.render("photo2", out, heroes=[h1, h2],
-                                    lines=tpl.build_lines("photo2", {**fields, "highlight": "VS"}))
+                                    lines=tpl.build_lines("photo2", fields))
                     _upload_photo(out, caption)
                     _save_live(out)
                     return True

@@ -253,15 +253,24 @@ def extract_one(psd_path, out_root, slug=None):
         _ID.Draw(alpha).rectangle([pb[0], pb[1], pb[2]-1, pb[3]-1], fill=0)
         frame.putalpha(alpha)
     else:
-        # N слотов: per-slot diff-маска (диагональ/скругления сохраняются сами),
-        # лёгкое закрытие мелких дыр (MaxFilter), чтобы тёмные зоны фото не просвечивали.
-        knock = Image.new("L", (W, H), 0)
+        # N слотов. diff-маска каждого слота даёт ВИДИМУЮ геометрию (клампнутую, с верным
+        # сплитом — raw layer-bbox off-canvas и не годится). Далее:
+        #  • скруглённый/маскированный слот (photo3) → пробиваем самой маской (форма важна);
+        #  • прямоугольный слот (VS) → пробиваем ПРЯМОУГОЛЬНИК по getbbox маски (без микро-точек).
+        knock = Image.new("L", (W, H), 0); kd = _ID.Draw(knock)
         for s in slots:
-            with_s = composite_hiding(psd, dynamic - {s}, W, H)   # показать только этот слот
+            with_s = composite_hiding(psd, dynamic - {s}, W, H)      # показать только этот слот
             d = ImageChops.difference(with_s.convert("RGB"), comp_full.convert("RGB")).convert("L")
             m = d.point(lambda v: 255 if v > 8 else 0).filter(ImageFilter.MaxFilter(5))
-            knock = ImageChops.lighter(knock, m)
-            slot_bboxes.append(list(m.getbbox() or bbox_of(s)))
+            shaped = getattr(s, "clipping_layer", False) or (hasattr(s, "has_mask") and s.has_mask())
+            if shaped:
+                knock = ImageChops.lighter(knock, m)
+                slot_bboxes.append(list(m.getbbox() or bbox_of(s)))
+            else:
+                bb = m.getbbox() or bbox_of(s)
+                bb = [max(bb[0], 0), max(bb[1], 0), min(bb[2], W), min(bb[3], H)]   # кламп к canvas
+                kd.rectangle([bb[0], bb[1], bb[2]-1, bb[3]-1], fill=255)            # чистый прямоугольник
+                slot_bboxes.append(list(bb))
         frame.putalpha(ImageChops.subtract(frame.split()[-1], knock))
         photo_bbox = slot_bboxes[0]
     frame = Image.alpha_composite(frame, overlay)                # вернуть над-фото
