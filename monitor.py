@@ -609,14 +609,34 @@ def _name_patterns():
     return _NAME_RX
 
 
+# team/org aliases in _LIQ_PAGE — used to PREFER a player portrait over a team logo when
+# both appear (transfer news: "ash to Aurora" → ash's portrait, not the Aurora crest).
+# Extra names here that aren't in the map are inert. Everything else in the map = a person.
+_TEAM_KEYS = frozenset({
+    "vitality", "team vitality", "navi", "natus vincere", "faze", "g2", "mouz", "falcons",
+    "aurora", "astralis", "team spirit", "spirit", "team liquid", "liquid", "mongolz",
+    "the mongolz", "furia", "heroic", "ence", "cloud9", "c9", "big", "fnatic", "virtus.pro",
+    "vp", "gamerlegion", "eternal fire", "3dmax", "tyloo", "complexity", "pain", "9z", "monte",
+    "nip", "ninjas in pyjamas", "imperial", "saw", "lynn vision", "wildcard", "m80", "nrg",
+    "passion ua", "b8", "mibr", "og", "betboom", "apeks", "metizport", "sangal", "fluxo",
+    "red canids", "legacy", "nemiga", "amkal", "rare atom", "atox", "the huns",
+    "chinggis warriors", "zero tenacity", "ecstatic", "sinners", "permitta", "9 pandas",
+    "nine pandas", "gaimin gladiators", "koi", "rebels", "sampi", "flyquest", "wings up",
+    "betera", "k27", "alliance", "bc.game", "parivision", "gun5", "fire flux", "oddik",
+    "sashi", "ihc", "partizan", "bad news eagles", "nouns", "nexus", "phantom",
+})
+
+
 def _detect_name(text):
-    """Longest entity (from the 167-name map) present in text by WORD BOUNDARY. None if none.
+    """Entity (from the name map) present in text by WORD BOUNDARY, longest-first. Prefer a
+    PERSON over a team when both match (transfer news). None if nothing matches.
     Used for both the portrait/logo lookup and the headline accent."""
     h = (text or "").lower()
-    for k, rx in _name_patterns():
-        if rx.search(h):
-            return k
-    return None
+    hits = [k for k, rx in _name_patterns() if rx.search(h)]   # longest-first (patterns sorted)
+    if not hits:
+        return None
+    players = [k for k in hits if k not in _TEAM_KEYS]
+    return (players or hits)[0]
 
 
 def _highlight(headline):

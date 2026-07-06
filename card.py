@@ -135,11 +135,21 @@ def make_card(headline, out_path, highlight=None, hero=None, seed=0, category=No
     y = panel_top + 46
     for ln in lines:
         _paste_center(img, _italic(_line_to_img(ln, f, int(sp))), y); y += line_h
-    # centered italic sub-line
+    # centered italic sub-line — autofit width, wrap to 2 lines if still too wide (no overflow)
     if sub:
-        sf = _mont(30); st = sub.upper()
-        _paste_center(img, _italic(_line_to_img([(st, (205, 216, 238), d.textlength(st, font=sf))], sf, 0), k=0.16), y + 8)
-        y += 52
+        st = sub.upper(); maxw_s = S - 130; ssz = 30
+        while ssz > 16 and d.textlength(st, font=_mont(ssz)) > maxw_s:
+            ssz -= 2
+        sf = _mont(ssz)
+        if d.textlength(st, font=sf) <= maxw_s:
+            sub_lines = [st]
+        else:                                    # wrap into 2 balanced lines by words
+            w = st.split(); mid = max(len(w) // 2, 1)
+            sub_lines = [" ".join(w[:mid]), " ".join(w[mid:])]
+        for ln in sub_lines:
+            _paste_center(img, _italic(_line_to_img([(ln, (205, 216, 238), d.textlength(ln, font=sf))], sf, 0), k=0.16), y + 8)
+            y += ssz + 14
+        y += 8
     # centered team logo (if provided)
     if team_logo:
         try:
