@@ -66,6 +66,7 @@ NITTER_INSTANCES = [x.strip() for x in os.getenv(
 PRIMARY_SOURCES_FILE = os.getenv("PRIMARY_SOURCES_FILE", "primary_sources.txt")
 PRIMARY_MAX_PER_ACCOUNT = int(os.getenv("PRIMARY_MAX_PER_ACCOUNT", "3"))
 TOPICS_FILE = os.getenv("TOPICS_FILE", "topics.json")  # story-level dedupe store
+RECENT_FILE = os.getenv("RECENT_FILE", "recent.json")  # last post openings (anti-repeat)
 
 # --- newsworthiness: keyword weights ---------------------------------------
 KEYWORDS = {
@@ -128,6 +129,17 @@ def is_spam(it):
             if not any(c.lower() in _VOWELS for c in tok):   # letters+digits, no vowel → code
                 return True
     return False
+
+
+# Low-value items for an engagement feed: ticket/promo announcements and content-free
+# teasers ("who made the cut?"). Real roster/transfer/result news does not match these.
+_PROMO_RX = re.compile(r"\b(tickets?|on sale|pre-?sale|pre-?order|available now|grab your|"
+                       r"get yours|buy your|sign up now|link in bio|giveaway ends)\b", re.I)
+_TEASER_RX = re.compile(r"\b(who made the cut|coming soon|stay tuned|you won'?t believe|"
+                        r"guess who|more to come|find out (who|more)|don'?t miss|big announcement)\b", re.I)
+def is_low_value(it):
+    t = it.get("title", "")
+    return bool(_PROMO_RX.search(t) or _TEASER_RX.search(t))
 
 
 # If draft_llm returns one of these (or the SKIP sentinel), do NOT post it.
@@ -435,6 +447,10 @@ def draft_llm(it):
                           "treat leaks as unconfirmed, not fact.\n")
         cta = (f"If — and only if — it feels natural, you may nudge readers to open cases at {SITE_URL}. "
                if SITE_URL else "No call-to-action and no links. ")
+        recent = load_recent()
+        avoid = (("\nANTI-REPEAT: your recent posts opened/landed with these lines — make THIS post "
+                  "clearly different in wording, opener and closer (do NOT reuse phrasings like these): "
+                  + " | ".join(recent[-8:]) + ".\n") if recent else "")
         prompt = (
             "You are one of several authors running a top-tier CS2 news Telegram channel for English-speaking fans. "
             f"Write ONE Telegram post in the voice of \"{persona}\": {style}.\n"
@@ -452,6 +468,7 @@ def draft_llm(it):
             "Do NOT reflexively end with 'Drop your take' / 'W or L?' / a question — MOST posts should just land "
             "with personality and stop. Use an engagement prompt only when the topic genuinely earns it, and vary it. "
             "Vary your structure, length, and opening so no two posts feel alike. Match the energy to the news.\n\n"
+            + avoid +
             "Hard rules: English only; ~15-45 words; no hashtags.\n"
             "FORMAT (match a top CS2 news channel's style): open with ONE category/tone emoji; put a "
             "country-flag emoji right before each player/team name to mark nationality (neutral fact ONLY — "
@@ -478,6 +495,10 @@ def draft_llm(it):
             "Style: do NOT write whole sentences in ALL CAPS (a word or two max, rarely); avoid clichéd tics like "
             "'someone pinch me', 'hold me', 'let that sit' — vary your openers and phrasing every single time. "
             "Do NOT invent facts, numbers, or quotes — react only to what is given. "
+            "Write plain, meaningful English — every phrase must make literal sense; never output garbled or "
+            "nonsensical filler (e.g. NOT 'meaningful address book'). "
+            "If a specific date, patch detail, or 'new feature' claim is not clearly established, hedge it "
+            "('reportedly', 'said to be') rather than stating an unverified specific as fact. "
             "Do NOT name competing skin/case/gambling brands.\n\n"
             "News: \"" + it["title"] + "\".")
         body = json.dumps({
@@ -903,6 +924,27 @@ def save_topics(topics):
         json.dump(topics[-120:], f)
 
 
+def load_recent():
+    try:
+        with open(RECENT_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+
+def save_recent(lines):
+    with open(RECENT_FILE, "w") as f:
+        json.dump(lines[-14:], f, ensure_ascii=False)
+
+
+def _post_gist(text):
+    """Comparable gist of a post: first line, HTML/emoji/punct stripped, lowered — used to
+    tell the model which recent openings/phrasings to avoid (anti-repeat)."""
+    lines = [l for l in re.sub(r"<[^>]+>", "", text or "").splitlines() if l.strip()]
+    s = re.sub(r"[^\w\s]", " ", lines[0] if lines else "")
+    return re.sub(r"\s+", " ", s).strip().lower()[:90]
+
+
 # Generic patch/update notes ("New CS2 update", "no release notes") arrive from many
 # sources — collapse them into ONE canonical topic so we don't post the same patch 5×.
 _GENERIC_UPDATE = re.compile(r"\b(update|patch|hotfix)\b", re.I)
@@ -959,10 +1001,12 @@ def run_once():
     # new + newsworthy, best first
     fresh = [it for it in items if it["id"] not in seen]
     scored = [(score_item(it), it) for it in fresh
-              if not is_blocked(it) and not is_offtopic(it) and not is_spam(it)]
+              if not is_blocked(it) and not is_offtopic(it) and not is_spam(it)
+              and not is_low_value(it)]
     picks = [it for s, it in sorted(scored, key=lambda x: -x[0]) if s >= MIN_SCORE]
 
     topics = load_topics()
+    recent_lines = load_recent()      # last post openings → anti-repeat in draft_llm
     posted = 0
     handled = set()          # ids we're done with (posted / dup) → mark seen
     for it in picks:
@@ -990,6 +1034,7 @@ def run_once():
                 post_to_telegram(text, it.get("image"))  # fallback: text / photo-URL
             posted += 1
             topics.append(sig)
+            recent_lines.append(_post_gist(text)); save_recent(recent_lines)   # anti-repeat memory
             handled.add(it["id"])
             log(f"POSTED [{category(it)}] {it['title'][:76]}")
         except Exception as e:

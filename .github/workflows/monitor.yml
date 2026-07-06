@@ -38,7 +38,7 @@ jobs:
           deadline=$((SECONDS + 20400))
           while [ "$SECONDS" -lt "$deadline" ]; do
             python3 monitor.py --once || echo "cycle error (continuing)"
-            git add seen.json topics.json assets/templates/_live || true
+            git add seen.json topics.json recent.json assets/templates/_live || true
             if ! git diff --cached --quiet; then
               git commit -m "update dedupe stores + live cards [skip ci]" || true
               git pull --rebase --autostash origin main || true
